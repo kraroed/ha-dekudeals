@@ -89,7 +89,9 @@ def test_manual_copies_are_never_touched_by_reconciliation():
 
     assert plan["updates"] == {}
     assert plan["creates"] == []
-\n\ndef test_extra_duplicate_is_created_only_after_explicit_confirmation():
+
+
+def test_extra_duplicate_is_created_only_after_explicit_confirmation():
     identity = build_reconciliation_plan([_item()], {})["creates"][0]["identity"]
     copies = {"copy-a": {**_copy("copy-a", identity), "match_confirmed": True}}
 
