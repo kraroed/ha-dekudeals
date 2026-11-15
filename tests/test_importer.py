@@ -59,3 +59,12 @@ def test_keeps_supported_metadata():
 def test_rejects_invalid_exports(raw):
     with pytest.raises(CollectionImportError):
         parse_collection_export(raw)
+
+
+def test_accepts_top_level_array_export():
+    items = parse_collection_export(
+        '[{"name":"Array Game","format":"physical","platform":"Switch"}]'
+    )
+
+    assert len(items) == 1
+    assert items[0]["name"] == "Array Game"
