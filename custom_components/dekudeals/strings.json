@@ -15,17 +15,17 @@
     },
     "abort": {
       "already_configured": "This DekuDeals collection is already configured."
-    },
-    "options": {
-      "step": {
-        "init": {
-          "title": "Update your DekuDeals collection",
-          "description": "Paste a new JSON export. Existing physical-copy inventory and lending history are preserved.",
-          "data": {
-            "collection_json": "Updated collection JSON export"
-          }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update your DekuDeals collection",
+        "description": "Paste a new JSON export. Existing physical-copy inventory and lending history are preserved.",
+        "data": {
+          "collection_json": "Updated collection JSON export"
         }
       }
     }
   }
-}\n
+}
