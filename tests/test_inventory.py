@@ -132,3 +132,23 @@ def test_concurrent_lend_attempts_allow_only_one_active_loan():
     assert sum(result is None for result in results) == 1
     assert sum(isinstance(result, InventoryError) for result in results) == 1
     assert len(inventory.snapshot()["history"]) == 1
+
+
+def test_rejects_malformed_persisted_inventory():
+    STORE_DATA["dekudeals_broken_inventory"] = {
+        "schema_version": 1,
+        "copies": {
+            "broken": {
+                "copy_id": "broken",
+                "game": "Example",
+                "platform": "Switch",
+                "format": "digital",
+                "source": "manual",
+                "active_loan": None,
+            }
+        },
+        "history": [],
+    }
+
+    with pytest.raises(InventoryError):
+        _new_inventory("broken")
