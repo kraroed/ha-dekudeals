@@ -46,22 +46,24 @@ During setup, enter your collection URL and paste the JSON export. To import a n
 
 ## Sensors
 
-Collection:
-- `sensor.deku_deals_games`
-- `sensor.deku_deals_switch_games`
-- `sensor.deku_deals_switch_2_games`
-- `sensor.deku_deals_physical_games`
-- `sensor.deku_deals_digital_games`
+Collection sensor names:
+- Games
+- Switch Games
+- Switch 2 Games
+- Physical Games
+- Digital Games
 
-Physical inventory:
-- `sensor.deku_deals_games_in_possession`
-- `sensor.deku_deals_games_lent_out`
-- `sensor.deku_deals_games_overdue`
-- `sensor.deku_deals_total_physical_copies`
-- `sensor.deku_deals_active_game_loans`
-- `sensor.deku_deals_game_lending_history`
-- `sensor.deku_deals_inventory_needs_review`
-- `sensor.deku_deals_unmatched_physical_games`
+Physical inventory sensor names:
+- Games In Possession
+- Games Lent Out
+- Games Overdue
+- Total Physical Copies
+- Active Game Loans
+- Game Lending History
+- Inventory Needs Review
+- Unmatched Physical Games
+
+Home Assistant generates entity IDs from the configured entity and device names; use the entity IDs shown in your instance.
 
 Sensor attributes expose bounded lists (up to 500 records) and a truncation flag. The lending-history sensor exposes the 20 most recent events while the full history remains stored locally.
 
