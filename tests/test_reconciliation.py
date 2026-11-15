@@ -23,6 +23,7 @@ def _copy(copy_id, identity, loan=None):
         "source_identity": identity,
         "source_fingerprint": "old",
         "collection_present": True,
+        "match_confirmed": False,
         "needs_review": False,
         "review_reason": None,
         "notes": "keep my notes",
@@ -88,3 +89,25 @@ def test_manual_copies_are_never_touched_by_reconciliation():
 
     assert plan["updates"] == {}
     assert plan["creates"] == []
+\n\ndef test_extra_duplicate_is_created_only_after_explicit_confirmation():
+    identity = build_reconciliation_plan([_item()], {})["creates"][0]["identity"]
+    copies = {"copy-a": {**_copy("copy-a", identity), "match_confirmed": True}}
+
+    plan = build_reconciliation_plan([_item(), _item()], copies)
+
+    assert len(plan["creates"]) == 1
+    assert plan["ambiguous"] == set()
+
+
+def test_confirmed_not_present_copy_is_not_rematched():
+    identity = build_reconciliation_plan([_item()], {})["creates"][0]["identity"]
+    copy = {
+        **_copy("copy-a", identity),
+        "collection_present": False,
+        "match_confirmed": True,
+    }
+
+    plan = build_reconciliation_plan([_item()], {"copy-a": copy})
+
+    assert len(plan["creates"]) == 1
+    assert plan["updates"] == {}
