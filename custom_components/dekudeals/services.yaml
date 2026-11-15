@@ -1,0 +1,113 @@
+lend_game:
+  name: Lend game
+  description: Record that a physical game copy has been lent to someone.
+  fields:
+    copy_id:
+      name: Copy ID
+      required: true
+      selector:
+        text:
+    borrower:
+      name: Borrower
+      required: true
+      selector:
+        text:
+    due_date:
+      name: Due date
+      description: Optional due date in YYYY-MM-DD format.
+      selector:
+        text:
+    notes:
+      name: Notes
+      selector:
+        text:
+    config_entry_id:
+      name: Collection entry ID
+      selector:
+        text:
+
+return_game:
+  name: Return game
+  description: Mark a currently lent physical copy as returned.
+  fields:
+    copy_id:
+      name: Copy ID
+      required: true
+      selector:
+        text:
+    config_entry_id:
+      name: Collection entry ID
+      selector:
+        text:
+
+register_copy:
+  name: Register physical copy
+  description: Add a physical copy that is not represented by the imported collection.
+  fields:
+    game:
+      name: Game
+      required: true
+      selector:
+        text:
+    platform:
+      name: Platform
+      selector:
+        text:
+    notes:
+      name: Notes
+      selector:
+        text:
+    config_entry_id:
+      name: Collection entry ID
+      selector:
+        text:
+
+update_inventory:
+  name: Update inventory notes
+  description: Update the notes attached to a physical copy.
+  fields:
+    copy_id:
+      name: Copy ID
+      required: true
+      selector:
+        text:
+    notes:
+      name: Notes
+      selector:
+        text:
+    config_entry_id:
+      name: Collection entry ID
+      selector:
+        text:
+
+resolve_inventory_match:
+  name: Resolve inventory match
+  description: Resolve an uncertain match between an imported row and physical inventory.
+  fields:
+    copy_id:
+      name: Copy ID
+      required: true
+      selector:
+        text:
+    resolution:
+      name: Resolution
+      required: true
+      selector:
+        select:
+          options:
+            - present
+            - not_present
+            - manual
+    config_entry_id:
+      name: Collection entry ID
+      selector:
+        text:
+
+refresh_collection:
+  name: Reprocess collection
+  description: Reload the stored JSON export and reconcile it with the physical inventory. Does not fetch the live website.
+  fields:
+    config_entry_id:
+      name: Collection entry ID
+      selector:
+        text:
