@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.core import callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -54,7 +55,18 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id, description):
         super().__init__(coordinator)
         self.entity_description = description
+        self._entry_id = entry_id
         self._attr_unique_id = f"{entry_id}_{description.key}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Group collection entities under one DekuDeals device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry_id)},
+            name="DekuDeals",
+            manufacturer="DekuDeals",
+            model="Collection and physical inventory",
+        )
 
     @property
     def native_value(self):
@@ -92,8 +104,19 @@ class InventorySensor(SensorEntity):
     def __init__(self, inventory, entry_id, description):
         self.inventory = inventory
         self.entity_description = description
+        self._entry_id = entry_id
         self._attr_unique_id = f"{entry_id}_{description.key}"
         self._signal = f"{DOMAIN}_{entry_id}_inventory_updated"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Group inventory entities with the collection device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry_id)},
+            name="DekuDeals",
+            manufacturer="DekuDeals",
+            model="Collection and physical inventory",
+        )
 
     async def async_added_to_hass(self):
         """Subscribe to successful inventory mutations."""
