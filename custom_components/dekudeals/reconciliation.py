@@ -58,7 +58,14 @@ def build_reconciliation_plan(
         )
 
     for copy_id, item in copies.items():
-        if item.get("source") == "dekudeals" and item.get("source_identity"):
+        if (
+            item.get("source") == "dekudeals"
+            and item.get("source_identity")
+            and not (
+                item.get("collection_present") is False
+                and not item.get("needs_review")
+            )
+        ):
             existing_groups[item["source_identity"]].append(
                 {"copy_id": copy_id, **item}
             )
@@ -83,7 +90,9 @@ def build_reconciliation_plan(
                 }
             continue
 
-        if len(incoming) != len(existing):
+        if len(incoming) < len(existing) or any(
+            item.get("needs_review") for item in existing
+        ):
             ambiguous.update(item["copy_id"] for item in existing)
             for item in existing:
                 updates[item["copy_id"]] = {
@@ -92,18 +101,30 @@ def build_reconciliation_plan(
                 }
             continue
 
-        # Equal-sized duplicate groups are matched as a group. No loan state,
-        # manual notes, or copy IDs are changed.
-        for old, new in zip(
-            sorted(existing, key=lambda row: row["copy_id"]),
-            sorted(incoming, key=lambda row: row["fingerprint"]),
+        if len(incoming) > len(existing) and not all(
+            item.get("collection_present") is True for item in existing
         ):
+            ambiguous.update(item["copy_id"] for item in existing)
+            for item in existing:
+                updates[item["copy_id"]] = {
+                    "needs_review": True,
+                    "review_reason": "duplicate_count_changed",
+                }
+            continue
+
+        # Explicitly confirmed copies can be matched and any additional rows
+        # created; IDs, loans, and private notes on existing copies are kept.
+        ordered_existing = sorted(existing, key=lambda row: row["copy_id"])
+        ordered_incoming = sorted(incoming, key=lambda row: row["fingerprint"])
+        for old, new in zip(ordered_existing, ordered_incoming):
             updates[old["copy_id"]] = {
                 "source_fingerprint": new["fingerprint"],
                 "collection_present": True,
                 "needs_review": False,
                 "review_reason": None,
             }
+        if len(ordered_incoming) > len(ordered_existing):
+            creates.extend(ordered_incoming[len(ordered_existing):])
 
     return {
         "updates": updates,
