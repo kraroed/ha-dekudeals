@@ -17,11 +17,15 @@ def parse_collection_export(raw: str) -> list[dict[str, Any]]:
     except (TypeError, json.JSONDecodeError) as err:
         raise CollectionImportError("The collection export is not valid JSON.") from err
 
-    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
-        raise CollectionImportError("Expected a JSON object containing an items array.")
+    if isinstance(payload, list):
+        source_items = payload
+    elif isinstance(payload, dict) and isinstance(payload.get("items"), list):
+        source_items = payload["items"]
+    else:
+        raise CollectionImportError("Expected a JSON object containing an items array or a JSON array.")
 
     normalized: list[dict[str, Any]] = []
-    for index, item in enumerate(payload["items"]):
+    for index, item in enumerate(source_items):
         if not isinstance(item, dict):
             raise CollectionImportError(f"Collection item {index + 1} must be an object.")
         name = item.get("name")
