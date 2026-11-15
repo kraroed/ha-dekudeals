@@ -1,5 +1,6 @@
-"""Load pure integration modules without requiring the HA runtime in unit tests."""
+"""Test-only package stubs for modules that do not need a live HA instance."""
 
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 from types import ModuleType
@@ -9,6 +10,24 @@ CUSTOM_COMPONENTS = ModuleType("custom_components")
 CUSTOM_COMPONENTS.__path__ = [str(ROOT / "custom_components")]
 DEKUDEALS = ModuleType("custom_components.dekudeals")
 DEKUDEALS.__path__ = [str(ROOT / "custom_components" / "dekudeals")]
-
 sys.modules.setdefault("custom_components", CUSTOM_COMPONENTS)
 sys.modules.setdefault("custom_components.dekudeals", DEKUDEALS)
+
+homeassistant = ModuleType("homeassistant")
+homeassistant.__path__ = []
+core = ModuleType("homeassistant.core")
+core.HomeAssistant = type("HomeAssistant", (), {})
+helpers = ModuleType("homeassistant.helpers")
+helpers.__path__ = []
+storage = ModuleType("homeassistant.helpers.storage")
+storage.Store = type("Store", (), {})
+util = ModuleType("homeassistant.util")
+util.__path__ = []
+dt = ModuleType("homeassistant.util.dt")
+dt.utcnow = lambda: datetime.now(timezone.utc)
+sys.modules.setdefault("homeassistant", homeassistant)
+sys.modules.setdefault("homeassistant.core", core)
+sys.modules.setdefault("homeassistant.helpers", helpers)
+sys.modules.setdefault("homeassistant.helpers.storage", storage)
+sys.modules.setdefault("homeassistant.util", util)
+sys.modules.setdefault("homeassistant.util.dt", dt)
