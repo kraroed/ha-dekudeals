@@ -23,13 +23,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     """Set up a configured collection and its persistent physical inventory."""
-    coordinator = DekuDealsCoordinator(hass, entry.data[CONF_COLLECTION_JSON])
+    collection_json = entry.options.get(CONF_COLLECTION_JSON, entry.data[CONF_COLLECTION_JSON])\n    coordinator = DekuDealsCoordinator(hass, collection_json)
     await coordinator.async_config_entry_first_refresh()
 
     inventory = GameInventory(hass, entry.entry_id)
     await inventory.async_load()
     await inventory.async_reconcile_collection(
-        parse_collection_export(entry.data[CONF_COLLECTION_JSON])
+        parse_collection_export(collection_json)
     )
 
     hass.data.setdefault(DOMAIN, {"entries": {}})
