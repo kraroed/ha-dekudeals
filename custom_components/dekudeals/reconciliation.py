@@ -74,6 +74,8 @@ def build_reconciliation_plan(
 
         if not incoming:
             for item in existing:
+                if item.get("collection_present") is False and not item.get("needs_review"):
+                    continue
                 updates[item["copy_id"]] = {
                     "collection_present": False,
                     "needs_review": True,
