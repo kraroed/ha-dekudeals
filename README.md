@@ -2,36 +2,61 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-> **Development status:** Early development, not a release. Live collection fetching uses the public JSON export available by appending `.json` to a DekuDeals collection URL. This is an export endpoint, not a documented official API, so it may change without notice.
+**Current version: 0.2.0**
 
-## Features implemented
+The integration reads the public JSON export available by appending `.json` to a DekuDeals collection URL. This is an undocumented export endpoint rather than a supported public API, so DekuDeals may change it without notice. No DekuDeals account credentials are requested or stored.
 
-- Fetch a public DekuDeals collection JSON export automatically.
-- Refresh the collection every six hours, with a manual refresh service.
-- Preserve duplicate rows and original order.
-- Normalize missing platforms to `Unknown`.
-- Collection count sensors for all games, Switch, Switch 2, physical, and digital games.
+## Features
+
+- Import a public DekuDeals collection automatically.
+- Refresh the collection every six hours, or on demand.
+- Preserve duplicate collection rows and their original order.
+- Normalize missing platform values to `Unknown`.
+- Collection count sensors for all games, Switch, Switch 2, physical games, and digital games.
 - Persistent local physical-copy inventory, separate from the online collection.
 - Unique IDs for duplicate physical copies.
-- Manual physical-copy registration.
-- Lending and return tracking with permanent history.
-- Optional due dates and overdue tracking (due today is not overdue).
-- Conservative duplicate-aware reconciliation. Uncertain count changes are flagged for review; copies and loan records are never automatically deleted.
-- Optional saved JSON export fallback for use when the public endpoint is unavailable.
+- Register physical copies manually.
+- Track loans, borrower names, optional due dates, and returns.
+- Preserve a permanent lending and return history.
+- Track overdue loans; a game due today is not overdue.
+- Reconcile collection changes conservatively. Ambiguous duplicate-count changes are flagged for review; existing copies, loans, and history are not automatically deleted.
+- Optionally save a JSON export as a fallback if the public endpoint is unavailable.
 
-## Collection setup
+## Installation
 
-Add **DekuDeals** from Settings → Devices & services and enter your public collection URL, for example:
+### HACS
 
-`https://www.dekudeals.com/collection/your-collection-id`
+1. Open HACS in Home Assistant.
+2. Open the integrations section and use the menu to add a custom repository.
+3. Enter `https://github.com/kraroed/ha-dekudeals` and select **Integration** as the category.
+4. Find **DekuDeals** and install it.
+5. Restart Home Assistant.
 
-The integration requests the corresponding `.json` export. No DekuDeals password or account credentials are required. If the endpoint is unavailable during setup, you can optionally provide a saved JSON export as a fallback.
+### Home Assistant Marketplace
 
-To update manually, call `dekudeals.refresh_collection`. Automatic refresh runs every six hours. The optional fallback export can be replaced or cleared in the integration's Configure / Options flow.
+On Home Assistant versions that include Marketplace, open **Settings → Marketplace**, choose **Add from link**, and enter `kraroed/ha-dekudeals`. The repository must still meet the Marketplace's custom-repository requirements. Restart Home Assistant after installation.
 
-## Expected JSON shape
+### Manual installation
 
-The public export may be a JSON object with an `items` array or a top-level JSON array. Each row may include `name`, `link`, `added_at`, `format`, `platform`, and `note`.
+Copy `custom_components/dekudeals` into `<config>/custom_components/dekudeals`, then restart Home Assistant.
+
+## Configuration
+
+1. In Home Assistant, open **Settings → Devices & services → Add integration**.
+2. Search for **DekuDeals**.
+3. Enter your public collection URL, for example:
+
+   `https://www.dekudeals.com/collection/your-collection-id`
+
+The integration requests the matching `.json` export automatically. You can optionally paste a saved JSON export during setup as an offline fallback. The integration prefers live data and uses the saved export only when the live request fails.
+
+To replace or clear the fallback later, open the integration's **Configure** options.
+
+## Supported export format
+
+The export can be either a JSON object containing an `items` array or a top-level JSON array. Each row should contain a game `name`; optional fields include `link`, `added_at`, `format`, `platform`, and `note`.
+
+Example:
 
 ```json
 {
@@ -47,48 +72,57 @@ The public export may be a JSON object with an `items` array or a top-level JSON
 }
 ```
 
-Rows are not deduplicated. Each physical row represents a separate copy.
+Rows are not deduplicated. Each physical row represents a separate collection copy.
 
 ## Sensors
 
-Collection sensor names:
-- Games
-- Switch Games
-- Switch 2 Games
-- Physical Games
-- Digital Games
+### Collection
 
-Physical inventory sensor names:
-- Games In Possession
-- Games Lent Out
-- Games Overdue
-- Total Physical Copies
-- Active Game Loans
-- Game Lending History
-- Inventory Needs Review
-- Unmatched Physical Games
+- **Games** — total imported rows.
+- **Switch Games** — rows whose platform is Switch.
+- **Switch 2 Games** — rows whose platform is Switch 2.
+- **Physical Games** — rows marked physical.
+- **Digital Games** — rows marked digital.
 
-Home Assistant generates entity IDs from the configured entity and device names; use the entity IDs shown in your instance.
+### Physical inventory and lending
 
-Sensor attributes expose bounded lists (up to 500 records) and a truncation flag. The lending-history sensor exposes the 20 most recent events while the full history remains stored locally.
+- **Games In Possession**
+- **Games Lent Out**
+- **Games Overdue**
+- **Total Physical Copies**
+- **Active Game Loans**
+- **Game Lending History**
+- **Inventory Needs Review**
+- **Unmatched Physical Games**
+
+Entity IDs are generated by Home Assistant from the configured device and entity names. Use the IDs shown in your instance.
+
+Sensor attributes expose bounded lists (up to 500 records) and include a truncation flag. The lending-history sensor exposes the 20 most recent events; the complete history remains stored locally.
 
 ## Services
 
-All services accept optional `config_entry_id` when multiple collections are configured.
+All services accept an optional `config_entry_id` when multiple collections are configured.
 
-- `dekudeals.register_copy`: register a physical copy not represented by the export (`game`, optional `platform`, `notes`).
-- `dekudeals.lend_game`: lend a copy (`copy_id`, `borrower`, optional `due_date` in YYYY-MM-DD, `notes`).
-- `dekudeals.return_game`: return a loan (`copy_id`).
-- `dekudeals.update_inventory`: update copy notes (`copy_id`, `notes`).
-- `dekudeals.resolve_inventory_match`: resolve a review item (`copy_id`, `resolution`: `present`, `not_present`, or `manual`).
-- `dekudeals.refresh_collection`: request an immediate live refresh and reconciliation.
+- `dekudeals.refresh_collection` — fetch the latest public export and reconcile inventory.
+- `dekudeals.register_copy` — register a physical copy not represented by the export (`game`, optional `platform`, `notes`).
+- `dekudeals.lend_game` — lend a copy (`copy_id`, `borrower`, optional `due_date` in YYYY-MM-DD format and `notes`).
+- `dekudeals.return_game` — return a loan (`copy_id`).
+- `dekudeals.update_inventory` — update copy notes (`copy_id`, `notes`).
+- `dekudeals.resolve_inventory_match` — resolve a review item (`copy_id`, `resolution`: `present`, `not_present`, or `manual`).
 
-Only physical copies can be lent. Digital collection entries never enter the physical inventory.
+Only physical copies can be lent. Digital collection entries are not added to physical inventory.
 
-## Installation
+## Data and privacy
 
-This integration is not yet published in HACS. For development, copy `custom_components/dekudeals` into `config/custom_components/`, restart Home Assistant, then add the integration from Settings → Devices & services.
+The integration requests the public collection export over HTTPS. It does not ask for or store your DekuDeals password. Physical-copy details, borrower names, notes, and lending history are stored locally in Home Assistant's integration storage and are not sent to DekuDeals.
 
-## Development and validation
+## Troubleshooting
 
-GitHub Actions run unit tests, Python compilation, Home Assistant hassfest, and HACS validation. HACS validation still needs repository metadata, a license, and branding assets before the repository is ready for HACS publication.
+- If setup cannot reach the export, confirm the collection is public and the URL is correct.
+- You can paste a saved JSON export as a fallback during setup, or add one later through **Configure**.
+- Use `dekudeals.refresh_collection` to request an immediate live refresh.
+- Check the Home Assistant logs for messages from the `dekudeals` integration.
+
+## Development
+
+The repository runs unit tests, Python compilation, Home Assistant hassfest validation, and HACS validation in GitHub Actions.
