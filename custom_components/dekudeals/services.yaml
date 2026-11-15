@@ -105,8 +105,8 @@ resolve_inventory_match:
         text:
 
 refresh_collection:
-  name: Reprocess collection
-  description: Reload the stored JSON export and reconcile it with the physical inventory. Does not fetch the live website.
+  name: Refresh collection
+  description: Fetch the latest public DekuDeals JSON export and reconcile it with the physical inventory.
   fields:
     config_entry_id:
       name: Collection entry ID
