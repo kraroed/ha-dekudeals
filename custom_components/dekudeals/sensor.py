@@ -40,7 +40,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         for description in COLLECTION_DESCRIPTIONS
     ]
     entities.extend(
-        InventorySensor(hass, inventory, entry.entry_id, description)
+        InventorySensor(inventory, entry.entry_id, description)
         for description in INVENTORY_DESCRIPTIONS
     )
     async_add_entities(entities)
@@ -89,7 +89,7 @@ class InventorySensor(SensorEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, hass, inventory, entry_id, description):
+    def __init__(self, inventory, entry_id, description):
         self.inventory = inventory
         self.entity_description = description
         self._attr_unique_id = f"{entry_id}_{description.key}"
