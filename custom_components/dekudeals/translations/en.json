@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Import your DekuDeals collection",
-        "description": "Paste the JSON export for your collection. The collection URL identifies this collection.",
+        "description": "Paste the JSON export for your collection. The collection URL is used to identify this collection.",
         "data": {
           "collection_url": "DekuDeals collection URL",
           "collection_json": "Collection JSON export"
@@ -15,17 +15,17 @@
     },
     "abort": {
       "already_configured": "This DekuDeals collection is already configured."
-    },
-    "options": {
-      "step": {
-        "init": {
-          "title": "Update your DekuDeals collection",
-          "description": "Paste a new JSON export. Existing physical-copy inventory and lending history are preserved.",
-          "data": {
-            "collection_json": "Updated collection JSON export"
-          }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update your DekuDeals collection",
+        "description": "Paste a new JSON export. Existing physical-copy inventory and lending history are preserved.",
+        "data": {
+          "collection_json": "Updated collection JSON export"
         }
       }
     }
   }
-}\n
+}
