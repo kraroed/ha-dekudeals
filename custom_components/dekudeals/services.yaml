@@ -64,7 +64,7 @@ register_copy:
 
 update_inventory:
   name: Update inventory notes
-  description: Update the notes attached to a physical copy.
+  description: Update the notes attached to a physical copy. Use an empty value to clear the notes.
   fields:
     copy_id:
       name: Copy ID
@@ -73,6 +73,7 @@ update_inventory:
         text:
     notes:
       name: Notes
+      required: true
       selector:
         text:
     config_entry_id:
