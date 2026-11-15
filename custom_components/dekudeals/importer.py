@@ -1,0 +1,44 @@
+"""Parsing and normalization for DekuDeals collection exports."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+
+class CollectionImportError(ValueError):
+    """Raised when a collection export is invalid."""
+
+
+def parse_collection_export(raw: str) -> list[dict[str, Any]]:
+    """Parse an exported collection while preserving row order and duplicates."""
+    try:
+        payload = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as err:
+        raise CollectionImportError("The collection export is not valid JSON.") from err
+
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        raise CollectionImportError("Expected a JSON object containing an items array.")
+
+    normalized: list[dict[str, Any]] = []
+    for index, item in enumerate(payload["items"]):
+        if not isinstance(item, dict):
+            raise CollectionImportError(f"Collection item {index + 1} must be an object.")
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise CollectionImportError(f"Collection item {index + 1} is missing a name.")
+        game_format = str(item.get("format") or "unknown").strip().lower()
+        if game_format not in {"physical", "digital"}:
+            game_format = "unknown"
+        normalized.append(
+            {
+                "name": name.strip(),
+                "link": item.get("link") if isinstance(item.get("link"), str) else None,
+                "added_at": item.get("added_at") if isinstance(item.get("added_at"), str) else None,
+                "format": game_format,
+                "platform": str(item.get("platform") or "Unknown").strip() or "Unknown",
+                "note": item.get("note") if isinstance(item.get("note"), str) else None,
+                "source_index": index,
+            }
+        )
+    return normalized
