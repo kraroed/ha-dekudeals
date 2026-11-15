@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "Import your DekuDeals collection",
-        "description": "Paste the JSON export for your collection. The collection URL is used to identify this collection.",
+        "description": "Enter your public DekuDeals collection URL. The integration fetches its JSON export automatically; a saved JSON export is optional as an offline fallback.",
         "data": {
           "collection_url": "DekuDeals collection URL",
-          "collection_json": "Collection JSON export"
+          "collection_json": "Optional saved JSON fallback"
         }
       }
     },
@@ -21,9 +21,9 @@
     "step": {
       "init": {
         "title": "Update your DekuDeals collection",
-        "description": "Paste a new JSON export. Existing physical-copy inventory and lending history are preserved.",
+        "description": "Replace or clear the optional saved JSON fallback. The integration continues to prefer the live collection endpoint.",
         "data": {
-          "collection_json": "Updated collection JSON export"
+          "collection_json": "Optional saved JSON fallback"
         }
       }
     }
