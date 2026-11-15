@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import CONF_COLLECTION_JSON, DOMAIN
+from .const import DOMAIN
 from .importer import parse_collection_export
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
@@ -19,15 +21,14 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self.collection_json = collection_json
         super().__init__(
             hass,
-            logger=__import__("logging").getLogger(__name__),
+            logger=_LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(hours=6),
         )
 
     async def _async_update_data(self) -> list[dict[str, Any]]:
-        """Return the imported collection snapshot.
+        """Parse the stored export snapshot.
 
-        Live DekuDeals fetching is intentionally not claimed in this initial
-        implementation; the JSON export is the source of truth until sync is added.
+        The integration currently imports a user-provided JSON export; it does
+        not claim to fetch or scrape the live DekuDeals website.
         """
         return parse_collection_export(self.collection_json)
