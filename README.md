@@ -31,7 +31,7 @@ To update manually, call `dekudeals.refresh_collection`. Automatic refresh runs 
 
 ## Expected JSON shape
 
-The public export is expected to contain a JSON object with an `items` array. Each row may include `name`, `link`, `added_at`, `format`, `platform`, and `note`.
+The public export may be a JSON object with an `items` array or a top-level JSON array. Each row may include `name`, `link`, `added_at`, `format`, `platform`, and `note`.
 
 ```json
 {
