@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import CONF_COLLECTION_JSON, DOMAIN
+from .const import CONF_COLLECTION_JSON, CONF_COLLECTION_URL, DOMAIN
 from .coordinator import DekuDealsCoordinator
-from .importer import parse_collection_export
 from .inventory import GameInventory
 from .services import async_setup_services
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["sensor"]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -24,29 +28,44 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
-    """Set up a configured collection and its persistent physical inventory."""
-    collection_json = entry.options.get(
-        CONF_COLLECTION_JSON, entry.data[CONF_COLLECTION_JSON]
+    """Set up a live collection and its persistent physical inventory."""
+    collection_url = entry.data[CONF_COLLECTION_URL]
+    fallback_json = entry.options.get(
+        CONF_COLLECTION_JSON, entry.data.get(CONF_COLLECTION_JSON)
     )
-    coordinator = DekuDealsCoordinator(hass, collection_json)
+    coordinator = DekuDealsCoordinator(hass, collection_url, fallback_json)
     await coordinator.async_config_entry_first_refresh()
 
     inventory = GameInventory(hass, entry.entry_id)
     await inventory.async_load()
-    await inventory.async_reconcile_collection(parse_collection_export(collection_json))
+    await inventory.async_reconcile_collection(coordinator.data or [])
 
     hass.data.setdefault(DOMAIN, {"entries": {}})
     hass.data[DOMAIN].setdefault("entries", {})[entry.entry_id] = {
         "coordinator": coordinator,
         "inventory": inventory,
     }
+
+    async def _async_reconcile_updated_collection() -> None:
+        """Keep physical inventory in sync after a successful live refresh."""
+        try:
+            await inventory.async_reconcile_collection(coordinator.data or [])
+        except Exception:
+            _LOGGER.exception("Failed to reconcile refreshed DekuDeals collection")
+            return
+        async_dispatcher_send(hass, f"{DOMAIN}_{entry.entry_id}_inventory_updated")
+
+    def _handle_coordinator_update() -> None:
+        hass.async_create_task(_async_reconcile_updated_collection())
+
+    entry.async_on_unload(coordinator.async_add_listener(_handle_coordinator_update))
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_reload_entry(hass: HomeAssistant, entry) -> None:
-    """Reload after the collection export changes."""
+    """Reload after the fallback export options change."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
