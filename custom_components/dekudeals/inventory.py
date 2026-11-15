@@ -107,6 +107,7 @@ class GameInventory:
                 "source_identity": None,
                 "source_fingerprint": None,
                 "collection_present": None,
+                "match_confirmed": False,
                 "needs_review": False,
                 "review_reason": None,
                 "notes": notes,
@@ -208,6 +209,7 @@ class GameInventory:
                 item["collection_present"] = None
             else:
                 item["collection_present"] = resolution == "present"
+            item["match_confirmed"] = True
             item["needs_review"] = False
             item["review_reason"] = None
             await self._async_commit(candidate)
@@ -237,6 +239,7 @@ class GameInventory:
                     "source_identity": item["identity"],
                     "source_fingerprint": item["fingerprint"],
                     "collection_present": True,
+                    "match_confirmed": False,
                     "needs_review": False,
                     "review_reason": None,
                     "notes": item.get("note"),
