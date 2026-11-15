@@ -68,3 +68,7 @@ def test_accepts_top_level_array_export():
 
     assert len(items) == 1
     assert items[0]["name"] == "Array Game"
+
+
+def test_accepts_empty_top_level_collection():
+    assert parse_collection_export("[]") == []
