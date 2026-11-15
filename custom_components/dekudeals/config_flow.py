@@ -44,7 +44,6 @@ class DekuDealsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_COLLECTION_JSON): selector.TextSelector(
                     selector.TextSelectorConfig(
                         multiline=True,
-                        multiple=False,
                     )
                 ),
             }
