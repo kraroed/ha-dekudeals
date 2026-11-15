@@ -102,7 +102,7 @@ def test_failed_storage_save_rolls_back_memory():
         asyncio.run(inventory.async_register_copy("Example"))
 
     assert inventory.snapshot() == before
-    assert STORE_DATA["dekudeals_test_inventory"] == before
+    assert "dekudeals_test_inventory" not in STORE_DATA
 
 
 def test_inventory_survives_reload():
