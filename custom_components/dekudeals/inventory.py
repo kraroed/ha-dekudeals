@@ -73,13 +73,15 @@ class GameInventory:
                 raise InventoryError("Inventory copy has an invalid platform.")
             if item.get("format") != "physical":
                 raise InventoryError("Only physical copies can be stored in inventory.")
-            if item.get("source") not in {"manual", "dekudeals"}:
+            if item.get("source") not in ("manual", "dekudeals"):
                 raise InventoryError("Inventory copy has an invalid source.")
             if item.get("source") == "dekudeals" and not isinstance(
                 item.get("source_identity"), str
             ):
                 raise InventoryError("Imported inventory copy is missing its source identity.")
-            if item.get("collection_present") not in {None, True, False}:
+            if item.get("collection_present") is not None and not isinstance(
+                item.get("collection_present"), bool
+            ):
                 raise InventoryError("Inventory collection status is invalid.")
             if not isinstance(item.get("needs_review"), bool):
                 raise InventoryError("Inventory review status is invalid.")
@@ -113,6 +115,7 @@ class GameInventory:
                 or event.get("event") not in {"lent", "returned"}
                 or not isinstance(event.get("game"), str)
                 or not isinstance(event.get("borrower"), str)
+                or not event.get("borrower").strip()
             ):
                 raise InventoryError("Lending history event is malformed.")
             timestamp_key = "returned_at" if event["event"] == "returned" else "lent_at"
