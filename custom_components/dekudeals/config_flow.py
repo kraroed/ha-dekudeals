@@ -43,7 +43,10 @@ class DekuDealsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_COLLECTION_URL): str,
+                    vol.Required(
+                        CONF_COLLECTION_URL,
+                        default="https://www.dekudeals.com/collection/w8h3s6w3t6",
+                    ): str,
                     vol.Optional(CONF_COLLECTION_JSON): selector.TextSelector(
                         selector.TextSelectorConfig(multiline=True)
                     ),
