@@ -5,7 +5,6 @@ from __future__ import annotations
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
@@ -85,13 +84,12 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class InventorySensor(Entity, SensorEntity):
+class InventorySensor(SensorEntity):
     """Expose a live view of persistent physical game inventory."""
 
     _attr_has_entity_name = True
 
     def __init__(self, hass, inventory, entry_id, description):
-        self.hass = hass
         self.inventory = inventory
         self.entity_description = description
         self._attr_unique_id = f"{entry_id}_{description.key}"
