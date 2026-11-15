@@ -1,6 +1,7 @@
 {
   "domain": "dekudeals",
   "name": "DekuDeals",
+  "categories": ["sensor"],
   "codeowners": ["@kraroed"],
   "config_flow": true,
   "documentation": "https://github.com/kraroed/ha-dekudeals",
