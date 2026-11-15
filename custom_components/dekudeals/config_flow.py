@@ -20,7 +20,7 @@ class DekuDealsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Configure a public collection URL and optional offline fallback."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            collection_url = user_input[CONF_COLLECTION_URL].strip()
+            collection_url = user_input[CONF_COLLECTION_URL].strip().removesuffix(".json").rstrip("/")
             fallback_json = user_input.get(CONF_COLLECTION_JSON, "").strip()
             try:
                 if not collection_url.startswith(
@@ -32,7 +32,7 @@ class DekuDealsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except CollectionImportError:
                 errors["base"] = "invalid_export"
             else:
-                await self.async_set_unique_id(collection_url.rstrip("/"))
+                await self.async_set_unique_id(collection_url)
                 self._abort_if_unique_id_configured()
                 data = {CONF_COLLECTION_URL: collection_url}
                 if fallback_json:
