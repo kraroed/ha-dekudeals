@@ -58,21 +58,68 @@ class GameInventory:
 
     @staticmethod
     def _validate_data(data: Any) -> None:
+        """Reject malformed storage instead of silently corrupting history."""
         if not isinstance(data, dict) or data.get("schema_version") != STORAGE_VERSION:
             raise InventoryError("Unsupported or malformed inventory storage version.")
         if not isinstance(data.get("copies"), dict) or not isinstance(data.get("history"), list):
             raise InventoryError("Inventory storage is malformed.")
+
         for copy_id, item in data["copies"].items():
             if not isinstance(item, dict) or item.get("copy_id") != copy_id:
                 raise InventoryError("Inventory copy record is malformed.")
             if not isinstance(item.get("game"), str) or not item["game"].strip():
                 raise InventoryError("Inventory copy is missing its game title.")
+            if not isinstance(item.get("platform"), str) or not item["platform"].strip():
+                raise InventoryError("Inventory copy has an invalid platform.")
             if item.get("format") != "physical":
                 raise InventoryError("Only physical copies can be stored in inventory.")
             if item.get("source") not in {"manual", "dekudeals"}:
                 raise InventoryError("Inventory copy has an invalid source.")
-            if item.get("active_loan") is not None and not isinstance(item["active_loan"], dict):
-                raise InventoryError("Inventory loan record is malformed.")
+            if item.get("source") == "dekudeals" and not isinstance(
+                item.get("source_identity"), str
+            ):
+                raise InventoryError("Imported inventory copy is missing its source identity.")
+            if item.get("collection_present") not in {None, True, False}:
+                raise InventoryError("Inventory collection status is invalid.")
+            if not isinstance(item.get("needs_review"), bool):
+                raise InventoryError("Inventory review status is invalid.")
+            if not isinstance(item.get("match_confirmed", False), bool):
+                raise InventoryError("Inventory match confirmation is invalid.")
+            if item.get("notes") is not None and not isinstance(item.get("notes"), str):
+                raise InventoryError("Inventory notes must be text.")
+            if not isinstance(item.get("created_at"), str):
+                raise InventoryError("Inventory creation timestamp is missing.")
+
+            loan = item.get("active_loan")
+            if loan is not None:
+                if not isinstance(loan, dict) or not isinstance(
+                    loan.get("borrower"), str
+                ) or not loan["borrower"].strip():
+                    raise InventoryError("Inventory loan record is malformed.")
+                if not isinstance(loan.get("lent_at"), str) or not _valid_date(
+                    loan.get("due_date")
+                ):
+                    raise InventoryError("Inventory loan dates are malformed.")
+                if loan.get("notes") is not None and not isinstance(
+                    loan.get("notes"), str
+                ):
+                    raise InventoryError("Loan notes must be text.")
+
+        for event in data["history"]:
+            if (
+                not isinstance(event, dict)
+                or not isinstance(event.get("event_id"), str)
+                or event.get("copy_id") not in data["copies"]
+                or event.get("event") not in {"lent", "returned"}
+                or not isinstance(event.get("game"), str)
+                or not isinstance(event.get("borrower"), str)
+            ):
+                raise InventoryError("Lending history event is malformed.")
+            timestamp_key = "returned_at" if event["event"] == "returned" else "lent_at"
+            if not isinstance(event.get(timestamp_key), str) or not _valid_date(
+                event.get("due_date")
+            ):
+                raise InventoryError("Lending history dates are malformed.")
 
     def snapshot(self) -> dict[str, Any]:
         """Return a defensive copy of all inventory data."""
