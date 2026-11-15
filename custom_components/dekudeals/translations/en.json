@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Import your DekuDeals collection",
+        "description": "Paste the JSON export for your collection. The collection URL identifies this collection.",
+        "data": {
+          "collection_url": "DekuDeals collection URL",
+          "collection_json": "Collection JSON export"
+        }
+      }
+    },
+    "error": {
+      "invalid_export": "The export must be valid JSON with an items array and a name on every item."
+    },
+    "abort": {
+      "already_configured": "This DekuDeals collection is already configured."
+    }
+  }
+}
