@@ -1,0 +1,134 @@
+"""Tests for persistent physical-copy inventory behavior."""
+
+import asyncio
+from copy import deepcopy
+
+import pytest
+
+from custom_components.dekudeals import inventory as inventory_module
+from custom_components.dekudeals.inventory import GameInventory, InventoryError
+
+STORE_DATA = {}
+FAIL_SAVE = set()
+
+
+class FakeStore:
+    """Small in-memory stand-in for Home Assistant Store."""
+
+    def __init__(self, hass, version, key):
+        self.key = key
+
+    async def async_load(self):
+        return deepcopy(STORE_DATA.get(self.key))
+
+    async def async_save(self, data):
+        if self.key in FAIL_SAVE:
+            raise OSError("simulated storage failure")
+        STORE_DATA[self.key] = deepcopy(data)
+
+
+@pytest.fixture(autouse=True)
+def reset_store(monkeypatch):
+    STORE_DATA.clear()
+    FAIL_SAVE.clear()
+    monkeypatch.setattr(inventory_module, "Store", FakeStore)
+
+
+def _new_inventory(entry_id="test"):
+    inventory = GameInventory(None, entry_id)
+    asyncio.run(inventory.async_load())
+    return inventory
+
+
+def test_duplicate_titles_receive_distinct_copy_ids():
+    inventory = _new_inventory()
+
+    first = asyncio.run(inventory.async_register_copy("Same Game", "Switch"))
+    second = asyncio.run(inventory.async_register_copy("Same Game", "Switch"))
+
+    assert first != second
+    assert len(inventory.snapshot()["copies"]) == 2
+
+
+def test_lending_and_return_preserve_permanent_history():
+    inventory = _new_inventory()
+    copy_id = asyncio.run(inventory.async_register_copy("Example"))
+
+    asyncio.run(
+        inventory.async_lend_copy(
+            copy_id, "Alex", "2026-12-01", "Bring it back safely"
+        )
+    )
+    assert inventory.snapshot()["copies"][copy_id]["active_loan"]["borrower"] == "Alex"
+
+    asyncio.run(inventory.async_return_copy(copy_id))
+    snapshot = inventory.snapshot()
+
+    assert snapshot["copies"][copy_id]["active_loan"] is None
+    assert [event["event"] for event in snapshot["history"]] == ["lent", "returned"]
+    assert snapshot["history"][-1]["borrower"] == "Alex"
+
+
+def test_rejects_invalid_due_date_without_mutation():
+    inventory = _new_inventory()
+    copy_id = asyncio.run(inventory.async_register_copy("Example"))
+    before = inventory.snapshot()
+
+    with pytest.raises(InventoryError):
+        asyncio.run(inventory.async_lend_copy(copy_id, "Alex", "12/01/2026"))
+
+    assert inventory.snapshot() == before
+
+
+def test_rejects_duplicate_lending_and_return_without_loan():
+    inventory = _new_inventory()
+    copy_id = asyncio.run(inventory.async_register_copy("Example"))
+    asyncio.run(inventory.async_lend_copy(copy_id, "Alex"))
+
+    with pytest.raises(InventoryError):
+        asyncio.run(inventory.async_lend_copy(copy_id, "Jordan"))
+
+    asyncio.run(inventory.async_return_copy(copy_id))
+    with pytest.raises(InventoryError):
+        asyncio.run(inventory.async_return_copy(copy_id))
+
+
+def test_failed_storage_save_rolls_back_memory():
+    inventory = _new_inventory()
+    before = inventory.snapshot()
+    FAIL_SAVE.add("dekudeals_test_inventory")
+
+    with pytest.raises(OSError):
+        asyncio.run(inventory.async_register_copy("Example"))
+
+    assert inventory.snapshot() == before
+    assert STORE_DATA["dekudeals_test_inventory"] == before
+
+
+def test_inventory_survives_reload():
+    first = _new_inventory()
+    copy_id = asyncio.run(first.async_register_copy("Example", "Switch 2"))
+
+    second = _new_inventory()
+
+    assert copy_id in second.snapshot()["copies"]
+    assert second.snapshot()["copies"][copy_id]["platform"] == "Switch 2"
+
+
+def test_concurrent_lend_attempts_allow_only_one_active_loan():
+    inventory = _new_inventory()
+    copy_id = asyncio.run(inventory.async_register_copy("Example"))
+
+    async def attempt_both():
+        results = await asyncio.gather(
+            inventory.async_lend_copy(copy_id, "Alex"),
+            inventory.async_lend_copy(copy_id, "Jordan"),
+            return_exceptions=True,
+        )
+        return results
+
+    results = asyncio.run(attempt_both())
+
+    assert sum(result is None for result in results) == 1
+    assert sum(isinstance(result, InventoryError) for result in results) == 1
+    assert len(inventory.snapshot()["history"]) == 1
