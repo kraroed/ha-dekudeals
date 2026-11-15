@@ -102,7 +102,9 @@ def build_reconciliation_plan(
             continue
 
         if len(incoming) > len(existing) and not all(
-            item.get("collection_present") is True for item in existing
+            item.get("match_confirmed") is True
+            and item.get("collection_present") is True
+            for item in existing
         ):
             ambiguous.update(item["copy_id"] for item in existing)
             for item in existing:
