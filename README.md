@@ -1,26 +1,37 @@
 # DekuDeals Home Assistant
 
-A Home Assistant custom integration for importing a DekuDeals collection and tracking physical game copies and loans.
+A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-> **Development status:** Early development, not a release. The current implementation imports a DekuDeals JSON export supplied during setup or through the integration options. It does not yet automatically fetch the live collection from DekuDeals.
+> **Development status:** Early development, not a release. Live collection fetching uses the public JSON export available by appending `.json` to a DekuDeals collection URL. This is an export endpoint, not a documented official API, so it may change without notice.
 
 ## Features implemented
 
-- Import a JSON collection export with an `items` array.
-- Preserve duplicate collection rows and original order.
+- Fetch a public DekuDeals collection JSON export automatically.
+- Refresh the collection every six hours, with a manual refresh service.
+- Preserve duplicate rows and original order.
 - Normalize missing platforms to `Unknown`.
 - Collection count sensors for all games, Switch, Switch 2, physical, and digital games.
-- Persistent local physical-copy inventory, separate from the imported collection.
+- Persistent local physical-copy inventory, separate from the online collection.
 - Unique IDs for duplicate physical copies.
 - Manual physical-copy registration.
 - Lending and return tracking with permanent history.
 - Optional due dates and overdue tracking (due today is not overdue).
 - Conservative duplicate-aware reconciliation. Uncertain count changes are flagged for review; copies and loan records are never automatically deleted.
-- Replace the imported export through the integration's Configure / Options flow.
+- Optional saved JSON export fallback for use when the public endpoint is unavailable.
 
-## Import format
+## Collection setup
 
-The integration accepts a JSON object containing an `items` array. Each row may include `name`, `link`, `added_at`, `format`, `platform`, and `note`.
+Add **DekuDeals** from Settings → Devices & services and enter your public collection URL, for example:
+
+`https://www.dekudeals.com/collection/your-collection-id`
+
+The integration requests the corresponding `.json` export. No DekuDeals password or account credentials are required. If the endpoint is unavailable during setup, you can optionally provide a saved JSON export as a fallback.
+
+To update manually, call `dekudeals.refresh_collection`. Automatic refresh runs every six hours. The optional fallback export can be replaced or cleared in the integration's Configure / Options flow.
+
+## Expected JSON shape
+
+The public export is expected to contain a JSON object with an `items` array. Each row may include `name`, `link`, `added_at`, `format`, `platform`, and `note`.
 
 ```json
 {
@@ -37,12 +48,6 @@ The integration accepts a JSON object containing an `items` array. Each row may 
 ```
 
 Rows are not deduplicated. Each physical row represents a separate copy.
-
-## Installation
-
-This integration is not yet published in HACS. For development, copy `custom_components/dekudeals` into `config/custom_components/`, restart Home Assistant, then add **DekuDeals** from Settings → Devices & services.
-
-During setup, enter your collection URL and paste the JSON export. To import a newer export later, open the integration's Configure option and replace the JSON. The integration reloads and reconciles the new snapshot while retaining local inventory and lending history.
 
 ## Sensors
 
@@ -76,10 +81,14 @@ All services accept optional `config_entry_id` when multiple collections are con
 - `dekudeals.return_game`: return a loan (`copy_id`).
 - `dekudeals.update_inventory`: update copy notes (`copy_id`, `notes`).
 - `dekudeals.resolve_inventory_match`: resolve a review item (`copy_id`, `resolution`: `present`, `not_present`, or `manual`).
-- `dekudeals.refresh_collection`: reload the currently stored export and re-run reconciliation. This is not a live website fetch.
+- `dekudeals.refresh_collection`: request an immediate live refresh and reconciliation.
 
 Only physical copies can be lent. Digital collection entries never enter the physical inventory.
 
+## Installation
+
+This integration is not yet published in HACS. For development, copy `custom_components/dekudeals` into `config/custom_components/`, restart Home Assistant, then add the integration from Settings → Devices & services.
+
 ## Development and validation
 
-The GitHub Actions workflow currently runs parser, reconciliation, and inventory unit tests. Full Home Assistant runtime tests, Home Assistant validation, HACS validation, branding, and live DekuDeals synchronization remain outstanding.
+GitHub Actions run unit tests, Python compilation, Home Assistant hassfest, and HACS validation. HACS validation still needs repository metadata, a license, and branding assets before the repository is ready for HACS publication.
