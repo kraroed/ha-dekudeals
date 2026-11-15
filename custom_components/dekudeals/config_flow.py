@@ -28,7 +28,7 @@ class DekuDealsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     raise CollectionImportError("Enter a valid DekuDeals collection URL.")
                 parse_collection_export(user_input[CONF_COLLECTION_JSON])
             except CollectionImportError:
-                errors["invalid_export"] = "invalid_export"
+                errors["base"] = "invalid_export"
             else:
                 await self.async_set_unique_id(collection_url.rstrip("/"))
                 self._abort_if_unique_id_configured()
