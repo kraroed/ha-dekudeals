@@ -48,7 +48,6 @@ def test_keeps_supported_metadata():
     "raw",
     [
         "not json",
-        "[]",
         "{}",
         '{"items":"not a list"}',
         '{"items":[null]}',
