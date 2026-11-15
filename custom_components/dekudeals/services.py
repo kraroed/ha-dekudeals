@@ -143,7 +143,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 vol.Required(ATTR_COPY_ID): str,
-                vol.Optional(ATTR_NOTES): str,
+                vol.Required(ATTR_NOTES): str,
                 **common,
             }
         ),
