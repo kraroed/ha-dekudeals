@@ -11,7 +11,7 @@
       }
     },
     "error": {
-      "invalid_export": "The export must be valid JSON with an items array and a name on every item."
+      "invalid_export": "Enter a valid public DekuDeals collection URL and, if supplied, a valid JSON export."
     },
     "abort": {
       "already_configured": "This DekuDeals collection is already configured."
