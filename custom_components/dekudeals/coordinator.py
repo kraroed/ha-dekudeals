@@ -235,7 +235,7 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         artwork_found += 1
 
                 current = enriched[index]
-                fallback_image = metadata.get("image") or current.get("image")
+                fallback_image = current.get("image") or metadata.get("image")
                 selected_image = provider_cover or fallback_image
                 if selected_image:
                     current["image"] = selected_image
@@ -271,10 +271,10 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     cache_entry["image"] = selected_image
                 cache_entry["checked_at"] = time.time()
                 cache_entry["artwork_verified"] = bool(
-                    provider_cover or (previous_artwork_verified and not provider_checked)
+                    provider_cover or previous_artwork_verified
                 )
                 cache_entry["artwork_source"] = (
-                    "thegamesdb" if provider_cover
+                    "thegamesdb" if (provider_cover or previous_artwork_verified)
                     else "thegamesdb_unavailable" if provider_checked
                     else cache_entry.get("artwork_source", "dekudeals")
                 )
