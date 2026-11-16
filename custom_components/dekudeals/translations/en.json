@@ -24,7 +24,8 @@
         "title": "Update your DekuDeals collection",
         "description": "Replace or clear the optional saved JSON fallback. The integration continues to prefer the live collection endpoint.",
         "data": {
-          "collection_json": "Optional saved JSON fallback"
+          "collection_json": "Optional saved JSON fallback",
+          "thegamesdb_api_key": "Optional TheGamesDB API key (for front box art)"
         }
       }
     }
