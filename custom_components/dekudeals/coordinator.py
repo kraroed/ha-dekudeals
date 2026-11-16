@@ -124,7 +124,17 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 and isinstance(cache.get("checked_at"), (int, float))
                 and now - cache["checked_at"] < cache_ttl
             )
-            if missing and not cache_is_fresh:
+            # A cache entry created before the API key was configured has
+            # no TheGamesDB check marker. Force one provider lookup for those
+            # previously missing covers, without discarding cached descriptions
+            # or waiting for the normal seven-day miss retry interval.
+            provider_needs_check = bool(
+                self._thegamesdb_api_key
+                and isinstance(cache, dict)
+                and not cache.get("thegamesdb_checked_at")
+                and not item.get("image")
+            )
+            if missing and (not cache_is_fresh or provider_needs_check):
                 candidates.append((index, link))
 
         if not candidates:
@@ -158,11 +168,13 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
                 # A failed or incomplete DekuDeals page must not prevent the
                 # independent box-art provider from finding a verified cover.
+                provider_checked = False
                 if not metadata.get("image") and self._artwork_provider is not None:
                     cover = await self._artwork_provider.async_get_front_cover(
                         str(enriched[index].get("name") or ""),
                         str(enriched[index].get("platform") or self.platform),
                     )
+                    provider_checked = True
                     if cover:
                         metadata["image"] = cover
 
@@ -170,10 +182,19 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 for field in ("image", "description", "item_type", "parent_game"):
                     if metadata.get(field) is not None:
                         current[field] = metadata[field]
-                self._metadata_cache[link] = {
+                cache_entry = {
                     **metadata,
                     "checked_at": time.time(),
                 }
+                if provider_checked:
+                    cache_entry["thegamesdb_checked_at"] = time.time()
+                elif isinstance(self._metadata_cache.get(link), dict):
+                    previous_provider_check = self._metadata_cache[link].get(
+                        "thegamesdb_checked_at"
+                    )
+                    if previous_provider_check:
+                        cache_entry["thegamesdb_checked_at"] = previous_provider_check
+                self._metadata_cache[link] = cache_entry
 
         await asyncio.gather(*(fetch(index, link) for index, link in selected))
         try:
