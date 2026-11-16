@@ -56,7 +56,18 @@ class TheGamesDBArtworkProvider:
             return None
         try:
             platform_ids = await self._async_get_platform_ids()
-            platform_id = platform_ids.get(normalize_game_title(platform))
+            requested_platform = normalize_game_title(platform)
+            platform_id = platform_ids.get(requested_platform)
+            if platform_id is None:
+                # TheGamesDB often prefixes vendor names (e.g. Sony) while
+                # DekuDeals uses the shorter console label. Accept only a
+                # whole-token prefix/suffix match, never fuzzy similarity.
+                matches = {
+                    value for key, value in platform_ids.items()
+                    if key.endswith(f" {requested_platform}") or requested_platform.endswith(f" {key}")
+                }
+                if len(matches) == 1:
+                    platform_id = matches.pop()
             if platform_id is None:
                 return None
             async with self._session.get(
