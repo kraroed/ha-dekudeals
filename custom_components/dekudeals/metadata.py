@@ -63,13 +63,17 @@ def is_dekudeals_item_url(value: str | None) -> bool:
     """Only request item pages on the expected public DekuDeals host."""
     if not isinstance(value, str):
         return False
-    parsed = urlparse(value)
-    return (
-        parsed.scheme == "https"
-        and parsed.hostname in {"dekudeals.com", "www.dekudeals.com"}
-        and parsed.path.startswith("/items/")
-        and bool(parsed.path.removeprefix("/items/").strip("/"))
-    )
+    try:
+        parsed = urlparse(value)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname in {"dekudeals.com", "www.dekudeals.com"}
+            and parsed.port in (None, 443)
+            and parsed.path.startswith("/items/")
+            and bool(parsed.path.removeprefix("/items/").strip("/"))
+        )
+    except ValueError:
+        return False
 
 
 def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
