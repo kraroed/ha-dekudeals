@@ -18,6 +18,7 @@ class _MetadataParser(HTMLParser):
         self._json_parts: list[str] = []
         self.json_ld: dict[str, str] = {}
         self.text_parts: list[str] = []
+        self.image_candidates: list[tuple[int, str]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = {key.casefold(): value for key, value in attrs if value}
@@ -26,6 +27,30 @@ class _MetadataParser(HTMLParser):
             content = values.get("content")
             if key and content:
                 self.values.setdefault(key, content.strip())
+        elif tag.casefold() == "img":
+            source = (
+                values.get("data-zoom-image")
+                or values.get("data-large-image")
+                or values.get("data-src")
+                or values.get("data-original")
+                or values.get("src")
+            )
+            if source:
+                classes = f"{values.get('class', '')} {values.get('id', '')}".casefold()
+                alt = values.get("alt", "").casefold()
+                score = 0
+                if re.search(r"cover|box[ -]?art|game[ -]?art|product[ -]?image|item[ -]?image", classes):
+                    score += 5
+                if re.search(r"cover|box[ -]?art|game cover|game artwork", alt):
+                    score += 4
+                if re.search(r"banner|logo|avatar|icon|sprite", f"{classes} {alt}"):
+                    score -= 5
+                width = values.get("width", "")
+                height = values.get("height", "")
+                if width.isdigit() and height.isdigit() and int(height) > 0:
+                    ratio = int(width) / int(height)
+                    score += 4 if ratio <= 0.8 else 2 if ratio <= 1.0 else -3 if ratio > 1.2 else 0
+                self.image_candidates.append((score, source.strip()))
         elif tag.casefold() == "script" and values.get("type", "").casefold() == "application/ld+json":
             self._json_ld = True
             self._json_parts = []
@@ -88,11 +113,17 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
     parser.feed(html)
     page_text = " ".join(" ".join(parser.text_parts).split())
 
+    # Prefer an actual portrait cover image found in the page body over
+    # the usually landscape social-sharing image in og:image.
+    image = None
+    if parser.image_candidates:
+        _, image = max(parser.image_candidates, key=lambda candidate: candidate[0])
     image = (
-        parser.values.get("og:image")
+        image
+        or parser.json_ld.get("image")
+        or parser.values.get("og:image")
         or parser.values.get("twitter:image")
         or parser.values.get("twitter:image:src")
-        or parser.json_ld.get("image")
     )
     if image:
         image = urljoin(page_url, image.strip())
