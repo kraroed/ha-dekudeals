@@ -47,9 +47,17 @@ class _MetadataParser(HTMLParser):
                     score -= 5
                 width = values.get("width", "")
                 height = values.get("height", "")
+                # Only accept candidates with explicit portrait dimensions.
+                # Without dimensions we cannot distinguish a front cover from
+                # a social banner or a full-width promotional image.
                 if width.isdigit() and height.isdigit() and int(height) > 0:
                     ratio = int(width) / int(height)
-                    score += 4 if ratio <= 0.8 else 2 if ratio <= 1.0 else -3 if ratio > 1.2 else 0
+                    if ratio <= 0.85:
+                        score += 4
+                    else:
+                        score = -100
+                else:
+                    score = -100
                 self.image_candidates.append((score, source.strip()))
         elif tag.casefold() == "script" and values.get("type", "").casefold() == "application/ld+json":
             self._json_ld = True
@@ -113,20 +121,13 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
     parser.feed(html)
     page_text = " ".join(" ".join(parser.text_parts).split())
 
-    # Prefer an actual portrait cover image found in the page body over
-    # the usually landscape social-sharing image in og:image.
+    # Never fall back to JSON-LD or social metadata: those commonly contain
+    # promotional banners rather than the front of a physical game case.
     image = None
     if parser.image_candidates:
         best_score, best_image = max(parser.image_candidates, key=lambda candidate: candidate[0])
         if best_score >= 4:
             image = best_image
-    image = (
-        image
-        or parser.json_ld.get("image")
-        or parser.values.get("og:image")
-        or parser.values.get("twitter:image")
-        or parser.values.get("twitter:image:src")
-    )
     if image:
         image = urljoin(page_url, image.strip())
         if urlparse(image).scheme != "https":
