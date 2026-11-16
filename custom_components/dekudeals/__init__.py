@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import CONF_COLLECTION_JSON, CONF_COLLECTION_URL, DOMAIN
+from .const import CONF_COLLECTION_JSON, CONF_COLLECTION_URL, CONF_PLATFORM, DOMAIN
 from .coordinator import DekuDealsCoordinator
 from .inventory import GameInventory
 from .services import async_setup_services
@@ -34,7 +34,8 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
         CONF_COLLECTION_JSON, entry.data.get(CONF_COLLECTION_JSON)
     )
     coordinator = DekuDealsCoordinator(
-        hass, collection_url, fallback_json, entry_id=entry.entry_id
+        hass, collection_url, fallback_json, entry_id=entry.entry_id,
+        platform=entry.data.get(CONF_PLATFORM, "Switch")
     )
     await coordinator.async_config_entry_first_refresh()
 
