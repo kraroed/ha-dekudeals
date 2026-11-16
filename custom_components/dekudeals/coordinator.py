@@ -17,6 +17,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
+from .thegamesdb import TheGamesDBArtworkProvider
 from .importer import CollectionImportError, filter_collection_platform, parse_collection_export
 from .metadata import extract_game_metadata, is_dekudeals_item_url
 
@@ -37,10 +38,13 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         fallback_json: str | None = None,
         entry_id: str = "default",
         platform: str = "Switch",
+        thegamesdb_api_key: str | None = None,
     ) -> None:
         self.collection_url = collection_url.rstrip("/")
         self.platform = " ".join((platform or "Switch").split())
         self.fallback_json = fallback_json.strip() if fallback_json else None
+        self._thegamesdb_api_key = (thegamesdb_api_key or "").strip()
+        self._artwork_provider: TheGamesDBArtworkProvider | None = None
         self._metadata_store = Store(
             hass, METADATA_CACHE_VERSION, f"{DOMAIN}_{entry_id}_game_metadata_v4"
         )
@@ -119,6 +123,8 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self._metadata_cursor = (start + len(selected)) % len(candidates)
         session = async_get_clientsession(self.hass)
         semaphore = asyncio.Semaphore(METADATA_CONCURRENCY)
+        if self._thegamesdb_api_key and self._artwork_provider is None:
+            self._artwork_provider = TheGamesDBArtworkProvider(session, self._thegamesdb_api_key)
 
         async def fetch(index: int, link: str) -> None:
             async with semaphore:
@@ -130,6 +136,13 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         response.raise_for_status()
                         html = await response.text(errors="ignore")
                     metadata = extract_game_metadata(html, link)
+                if not metadata.get("image") and self._artwork_provider is not None:
+                    cover = await self._artwork_provider.async_get_front_cover(
+                        str(enriched[index].get("name") or ""),
+                        str(enriched[index].get("platform") or self.platform),
+                    )
+                    if cover:
+                        metadata["image"] = cover
                 except (aiohttp.ClientError, asyncio.TimeoutError, UnicodeError) as err:
                     _LOGGER.debug("Could not retrieve metadata for %s: %s", link, err)
                     return
