@@ -61,7 +61,7 @@ def select_thegamesdb_front_cover(
             resolution = image.get("resolution")
             if not isinstance(resolution, str):
                 continue
-            match = re.fullmatch(r"(\\d+)x(\\d+)", resolution.strip())
+            match = re.fullmatch(r"(\d+)x(\d+)", resolution.strip())
             if not match:
                 continue
             width, height = (int(part) for part in match.groups())
