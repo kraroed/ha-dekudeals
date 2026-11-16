@@ -26,6 +26,7 @@ METADATA_CACHE_VERSION = 2
 METADATA_MAX_PER_REFRESH = 20
 METADATA_CONCURRENCY = 3
 METADATA_CACHE_TTL = 30 * 24 * 60 * 60
+METADATA_MISS_RETRY_TTL = 7 * 24 * 60 * 60
 
 
 class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
@@ -110,10 +111,18 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 or not cache
                 or not cache.get("item_type")
             )
+            # Successful artwork can remain cached for 30 days. If no verified
+            # image was found, retry sooner so newly added provider artwork can
+            # appear without waiting a full month.
+            cache_ttl = (
+                METADATA_CACHE_TTL
+                if isinstance(cache, dict) and cache.get("image")
+                else METADATA_MISS_RETRY_TTL
+            )
             cache_is_fresh = (
                 isinstance(cache, dict)
                 and isinstance(cache.get("checked_at"), (int, float))
-                and now - cache["checked_at"] < METADATA_CACHE_TTL
+                and now - cache["checked_at"] < cache_ttl
             )
             if missing and not cache_is_fresh:
                 candidates.append((index, link))
