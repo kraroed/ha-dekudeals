@@ -104,8 +104,25 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
     if match:
         description = " ".join(match.group(1).split())[:2000] or None
 
-    dlc_match = re.search(r"\bDLC\s+for\s+(.+?)(?=\s+(?:Details|Current prices|Description)\b|\s+\d+(?:\.\d+)?\s*⭐|$)", page_text, re.IGNORECASE)
-    item_type = "dlc" if dlc_match else "game"
+    dlc_match = re.search(
+        r"\\bDLC\\s+for\\s+(.+?)(?=\\s+(?:Details|Current prices|Description)\\b|\\s+\\d+(?:\\.\\d+)?\\s*⭐|$)",
+        page_text,
+        re.IGNORECASE,
+    )
+    page_title = parser.values.get("og:title") or parser.values.get("twitter:title") or ""
+    # DekuDeals does not consistently expose the "DLC for [game]" label in
+    # the same part of the page. Also inspect the title and the actual
+    # Description section for explicit DLC / add-on / expansion wording.
+    dlc_markers = re.compile(
+        r"\\b(?:DLC|downloadable content|season pass|expansion pack|add[- ]on)\\b",
+        re.IGNORECASE,
+    )
+    is_dlc = bool(
+        dlc_match
+        or dlc_markers.search(page_title)
+        or (description and dlc_markers.search(description))
+    )
+    item_type = "dlc" if is_dlc else "game"
     parent_game = " ".join(dlc_match.group(1).split())[:300] if dlc_match else None
 
     return {
