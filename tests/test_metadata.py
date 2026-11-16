@@ -50,3 +50,19 @@ def test_only_fetches_https_dekudeals_item_pages():
     assert not is_dekudeals_item_url("http://www.dekudeals.com/items/example")
     assert not is_dekudeals_item_url("https://example.com/items/example")
     assert not is_dekudeals_item_url("https://www.dekudeals.com/collection/example")
+
+
+
+def test_uses_json_ld_when_social_metadata_is_missing():
+    html = '''
+    <script type="application/ld+json">
+    {"@type":"VideoGame","description":"Structured description","image":["https://cdn.example/cover.jpg"]}
+    </script>
+    '''
+
+    assert extract_game_metadata(
+        html, "https://www.dekudeals.com/items/example"
+    ) == {
+        "image": "https://cdn.example/cover.jpg",
+        "description": "Structured description",
+    }
