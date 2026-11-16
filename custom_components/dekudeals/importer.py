@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .const import ALL_PLATFORMS
+
 
 class CollectionImportError(ValueError):
     """Raised when a collection export is invalid."""
@@ -57,7 +59,8 @@ def parse_collection_export(raw: str) -> list[dict[str, Any]]:
                 "format": game_format,
                 "platform": str(item.get("platform") or "Unknown").strip() or "Unknown",
                 "note": item.get("note") if isinstance(item.get("note"), str) else None,
-                "image": _optional_https_url(item.get("image") or item.get("image_url") or item.get("cover")),
+                # Export image fields are not typed as front-cover artwork; do not trust them.
+                "image": None,
                 "description": None,
                 "item_type": "game",
                 "parent_game": None,
@@ -65,3 +68,17 @@ def parse_collection_export(raw: str) -> list[dict[str, Any]]:
             }
         )
     return normalized
+
+
+def filter_collection_platform(
+    items: list[dict[str, Any]], platform: str | None
+) -> list[dict[str, Any]]:
+    """Return only one console's rows, or all rows when requested."""
+    selected = " ".join((platform or "Switch").split()).casefold()
+    if selected == ALL_PLATFORMS.casefold():
+        return list(items)
+    return [
+        item for item in items
+        if " ".join(str(item.get("platform") or "Unknown").split()).casefold()
+        == selected
+    ]

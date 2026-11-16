@@ -17,18 +17,20 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
-from .importer import CollectionImportError, parse_collection_export
+from .importer import CollectionImportError, filter_collection_platform, parse_collection_export
 from .metadata import extract_game_metadata, is_dekudeals_item_url
+from .thegamesdb import TheGamesDBArtworkProvider
 
 _LOGGER = logging.getLogger(__name__)
-METADATA_CACHE_VERSION = 1
+METADATA_CACHE_VERSION = 2
 METADATA_MAX_PER_REFRESH = 20
 METADATA_CONCURRENCY = 3
 METADATA_CACHE_TTL = 30 * 24 * 60 * 60
+METADATA_MISS_RETRY_TTL = 7 * 24 * 60 * 60
 
 
 class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
-    """Fetch a public collection and enrich rows with cached page metadata."""
+    """Fetch a public collection and enrich rows with cached game metadata."""
 
     def __init__(
         self,
@@ -36,18 +38,23 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         collection_url: str,
         fallback_json: str | None = None,
         entry_id: str = "default",
+        platform: str = "Switch",
+        thegamesdb_api_key: str | None = None,
     ) -> None:
         self.collection_url = collection_url.rstrip("/")
+        self.platform = " ".join((platform or "Switch").split())
         self.fallback_json = fallback_json.strip() if fallback_json else None
+        self._thegamesdb_api_key = (thegamesdb_api_key or "").strip()
+        self._artwork_provider: TheGamesDBArtworkProvider | None = None
         self._metadata_store = Store(
-            hass, METADATA_CACHE_VERSION, f"{DOMAIN}_{entry_id}_game_metadata_v3"
+            hass, METADATA_CACHE_VERSION, f"{DOMAIN}_{entry_id}_game_metadata_v4"
         )
         self._metadata_cache: dict[str, dict[str, Any]] | None = None
         self._metadata_cursor = 0
         super().__init__(
             hass,
             logger=_LOGGER,
-            name=DOMAIN,
+            name=f"{DOMAIN}_{self.platform.casefold().replace(' ', '_')}",
             update_interval=timedelta(hours=6),
         )
 
@@ -98,11 +105,24 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     item["item_type"] = cache["item_type"]
                 if isinstance(cache.get("parent_game"), str):
                     item["parent_game"] = cache["parent_game"]
-            missing = not item.get("image") or not item.get("description") or not cache or not cache.get("item_type")
+            missing = (
+                not item.get("image")
+                or not item.get("description")
+                or not cache
+                or not cache.get("item_type")
+            )
+            # Successful artwork can remain cached for 30 days. If no verified
+            # image was found, retry sooner so newly added provider artwork can
+            # appear without waiting a full month.
+            cache_ttl = (
+                METADATA_CACHE_TTL
+                if isinstance(cache, dict) and cache.get("image")
+                else METADATA_MISS_RETRY_TTL
+            )
             cache_is_fresh = (
                 isinstance(cache, dict)
                 and isinstance(cache.get("checked_at"), (int, float))
-                and now - cache["checked_at"] < METADATA_CACHE_TTL
+                and now - cache["checked_at"] < cache_ttl
             )
             if missing and not cache_is_fresh:
                 candidates.append((index, link))
@@ -111,15 +131,18 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             return enriched
 
         start = self._metadata_cursor % len(candidates)
-        selected = (
-            candidates[start:] + candidates[:start]
-        )[:METADATA_MAX_PER_REFRESH]
+        selected = (candidates[start:] + candidates[:start])[:METADATA_MAX_PER_REFRESH]
         self._metadata_cursor = (start + len(selected)) % len(candidates)
         session = async_get_clientsession(self.hass)
         semaphore = asyncio.Semaphore(METADATA_CONCURRENCY)
+        if self._thegamesdb_api_key and self._artwork_provider is None:
+            self._artwork_provider = TheGamesDBArtworkProvider(
+                session, self._thegamesdb_api_key
+            )
 
         async def fetch(index: int, link: str) -> None:
             async with semaphore:
+                metadata: dict[str, Any] = {}
                 try:
                     timeout = aiohttp.ClientTimeout(total=20)
                     async with session.get(
@@ -129,8 +152,19 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         html = await response.text(errors="ignore")
                     metadata = extract_game_metadata(html, link)
                 except (aiohttp.ClientError, asyncio.TimeoutError, UnicodeError) as err:
-                    _LOGGER.debug("Could not retrieve metadata for %s: %s", link, err)
-                    return
+                    _LOGGER.debug(
+                        "Could not retrieve DekuDeals metadata for %s: %s", link, err
+                    )
+
+                # A failed or incomplete DekuDeals page must not prevent the
+                # independent box-art provider from finding a verified cover.
+                if not metadata.get("image") and self._artwork_provider is not None:
+                    cover = await self._artwork_provider.async_get_front_cover(
+                        str(enriched[index].get("name") or ""),
+                        str(enriched[index].get("platform") or self.platform),
+                    )
+                    if cover:
+                        metadata["image"] = cover
 
                 current = enriched[index]
                 for field in ("image", "description", "item_type", "parent_game"):
@@ -184,4 +218,5 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     "Both the live collection and saved export are invalid."
                 ) from fallback_err
 
-        return await self._async_enrich_metadata(items)
+        selected_items = filter_collection_platform(items, self.platform)
+        return await self._async_enrich_metadata(selected_items)

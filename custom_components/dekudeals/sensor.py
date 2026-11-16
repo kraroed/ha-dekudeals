@@ -13,6 +13,7 @@ from .const import DOMAIN, MAX_LIST_ITEMS
 
 COLLECTION_DESCRIPTIONS = (
     SensorEntityDescription(key="games", name="Games", icon="mdi:gamepad-variant"),
+    SensorEntityDescription(key="configured_platform_games", name="Configured Platform Games", icon="mdi:gamepad-variant"),
     SensorEntityDescription(key="switch_games", name="Switch Games", icon="mdi:gamepad"),
     SensorEntityDescription(key="switch_2_games", name="Switch 2 Games", icon="mdi:gamepad"),
     SensorEntityDescription(key="physical_games", name="Physical Games", icon="mdi:gamepad"),
@@ -77,6 +78,8 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
         games = [item for item in items if item.get("item_type") != "dlc"]
         if key == "games":
             return len(games)
+        if key == "configured_platform_games":
+            return len(games)
         if key == "dlc_items":
             return sum(item.get("item_type") == "dlc" for item in items)
         if key == "switch_games":
@@ -97,6 +100,7 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
             "items": items[:MAX_LIST_ITEMS],
             "items_truncated": len(items) > MAX_LIST_ITEMS,
             "source": "DekuDeals JSON export",
+            "configured_platform": self.coordinator.platform,
         }
 
 

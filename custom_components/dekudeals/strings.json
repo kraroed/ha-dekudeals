@@ -5,6 +5,7 @@
         "title": "Import your DekuDeals collection",
         "description": "Enter your public DekuDeals collection URL. The integration fetches its JSON export automatically; a saved JSON export is optional as an offline fallback.",
         "data": {
+          "platform": "Console/platform (use All Platforms to include everything)",
           "collection_url": "DekuDeals collection URL",
           "collection_json": "Optional saved JSON fallback"
         }
@@ -23,7 +24,8 @@
         "title": "Update your DekuDeals collection",
         "description": "Replace or clear the optional saved JSON fallback. The integration continues to prefer the live collection endpoint.",
         "data": {
-          "collection_json": "Optional saved JSON fallback"
+          "collection_json": "Optional saved JSON fallback",
+          "thegamesdb_api_key": "Optional TheGamesDB API key (for front box art)"
         }
       }
     }

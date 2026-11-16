@@ -8,7 +8,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import CONF_COLLECTION_JSON, CONF_COLLECTION_URL, DOMAIN
+from .const import (
+    CONF_COLLECTION_JSON,
+    CONF_COLLECTION_URL,
+    CONF_PLATFORM,
+    CONF_THEGAMESDB_API_KEY,
+    DOMAIN,
+)
 from .coordinator import DekuDealsCoordinator
 from .inventory import GameInventory
 from .services import async_setup_services
@@ -34,7 +40,12 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
         CONF_COLLECTION_JSON, entry.data.get(CONF_COLLECTION_JSON)
     )
     coordinator = DekuDealsCoordinator(
-        hass, collection_url, fallback_json, entry_id=entry.entry_id
+        hass,
+        collection_url,
+        fallback_json,
+        entry_id=entry.entry_id,
+        platform=entry.data.get(CONF_PLATFORM, "Switch"),
+        thegamesdb_api_key=entry.options.get(CONF_THEGAMESDB_API_KEY),
     )
     await coordinator.async_config_entry_first_refresh()
 
@@ -67,7 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
 
 
 async def async_reload_entry(hass: HomeAssistant, entry) -> None:
-    """Reload after the fallback export options change."""
+    """Reload after options change."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
