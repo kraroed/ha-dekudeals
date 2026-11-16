@@ -7,7 +7,13 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
-from .const import (\n    CONF_COLLECTION_JSON,\n    CONF_COLLECTION_URL,\n    CONF_PLATFORM,\n    CONF_THEGAMESDB_API_KEY,\n    DOMAIN,\n)
+from .const import (
+    CONF_COLLECTION_JSON,
+    CONF_COLLECTION_URL,
+    CONF_PLATFORM,
+    CONF_THEGAMESDB_API_KEY,
+    DOMAIN,
+)
 from .importer import CollectionImportError, parse_collection_export
 
 
@@ -20,12 +26,20 @@ class DekuDealsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Configure a public collection URL and optional offline fallback."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            collection_url = user_input[CONF_COLLECTION_URL].strip().removesuffix(".json").rstrip("/")
+            collection_url = (
+                user_input[CONF_COLLECTION_URL]
+                .strip()
+                .removesuffix(".json")
+                .rstrip("/")
+            )
             fallback_json = user_input.get(CONF_COLLECTION_JSON, "").strip()
             platform = " ".join(user_input.get(CONF_PLATFORM, "Switch").split())
             try:
                 if not collection_url.startswith(
-                    ("https://www.dekudeals.com/collection/", "https://dekudeals.com/collection/")
+                    (
+                        "https://www.dekudeals.com/collection/",
+                        "https://dekudeals.com/collection/",
+                    )
                 ):
                     raise CollectionImportError("Enter a valid DekuDeals collection URL.")
                 if not platform or len(platform) > 64:
@@ -38,13 +52,22 @@ class DekuDealsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Preserve the legacy Switch unique ID so existing installations
                 # upgrade in place; other consoles can use the same collection URL.
                 normalized_platform = platform.casefold()
-                unique_id = collection_url if normalized_platform == "switch" else f"{collection_url}::{normalized_platform}"
+                unique_id = (
+                    collection_url
+                    if normalized_platform == "switch"
+                    else f"{collection_url}::{normalized_platform}"
+                )
                 await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
-                data = {CONF_COLLECTION_URL: collection_url, CONF_PLATFORM: platform}
+                data = {
+                    CONF_COLLECTION_URL: collection_url,
+                    CONF_PLATFORM: platform,
+                }
                 if fallback_json:
                     data[CONF_COLLECTION_JSON] = fallback_json
-                return self.async_create_entry(title=f"DekuDeals — {platform}", data=data)
+                return self.async_create_entry(
+                    title=f"DekuDeals — {platform}", data=data
+                )
 
         return self.async_show_form(
             step_id="user",
@@ -70,13 +93,13 @@ class DekuDealsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class DekuDealsOptionsFlow(config_entries.OptionsFlow):
-    """Update or clear the optional saved JSON fallback."""
+    """Update or clear the optional saved JSON fallback and artwork API key."""
 
     def __init__(self, config_entry):
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
-        """Validate and save a replacement fallback export."""
+        """Validate and save options."""
         errors: dict[str, str] = {}
         if user_input is not None:
             fallback_json = user_input.get(CONF_COLLECTION_JSON, "").strip()
@@ -91,6 +114,7 @@ class DekuDealsOptionsFlow(config_entries.OptionsFlow):
                 if fallback_json:
                     options[CONF_COLLECTION_JSON] = fallback_json
                 return self.async_create_entry(title="", data=options)
+
         current_json = self.config_entry.options.get(
             CONF_COLLECTION_JSON, self.config_entry.data.get(CONF_COLLECTION_JSON, "")
         )
@@ -99,11 +123,17 @@ class DekuDealsOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(CONF_COLLECTION_JSON, default=current_json): selector.TextSelector(
+                    vol.Optional(
+                        CONF_COLLECTION_JSON, default=current_json
+                    ): selector.TextSelector(
                         selector.TextSelectorConfig(multiline=True)
                     ),
-                    vol.Optional(CONF_THEGAMESDB_API_KEY, default=current_api_key): selector.TextSelector(
-                        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                    vol.Optional(
+                        CONF_THEGAMESDB_API_KEY, default=current_api_key
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD
+                        )
                     ),
                 }
             ),
