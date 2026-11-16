@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .const import ALL_PLATFORMS
+
 
 class CollectionImportError(ValueError):
     """Raised when a collection export is invalid."""
@@ -72,7 +74,7 @@ def filter_collection_platform(
 ) -> list[dict[str, Any]]:
     """Return only one console's rows, or all rows when requested."""
     selected = " ".join((platform or "Switch").split()).casefold()
-    if selected == "all platforms":
+    if selected == ALL_PLATFORMS.casefold():
         return list(items)
     return [
         item for item in items
