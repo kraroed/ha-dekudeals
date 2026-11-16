@@ -7,7 +7,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
-from .const import CONF_COLLECTION_JSON, CONF_COLLECTION_URL, CONF_PLATFORM, DOMAIN
+from .const import CONF_COLLECTION_JSON, CONF_COLLECTION_URL, CONF_PLATFORM, CONF_THEGAMESDB_API_KEY, DOMAIN
 from .importer import CollectionImportError, parse_collection_export
 
 
@@ -80,29 +80,29 @@ class DekuDealsOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             fallback_json = user_input.get(CONF_COLLECTION_JSON, "").strip()
+            api_key = user_input.get(CONF_THEGAMESDB_API_KEY, "").strip()
             try:
                 if fallback_json:
                     parse_collection_export(fallback_json)
             except CollectionImportError:
                 errors["base"] = "invalid_export"
             else:
-                return self.async_create_entry(
-                    title="",
-                    data={CONF_COLLECTION_JSON: fallback_json},
-                )
-
+                options = {CONF_THEGAMESDB_API_KEY: api_key}
+                if fallback_json:
+                    options[CONF_COLLECTION_JSON] = fallback_json
+                return self.async_create_entry(title="", data=options)
         current_json = self.config_entry.options.get(
             CONF_COLLECTION_JSON, self.config_entry.data.get(CONF_COLLECTION_JSON, "")
         )
+        current_api_key = self.config_entry.options.get(CONF_THEGAMESDB_API_KEY, "")
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_COLLECTION_JSON, default=current_json
-                    ): selector.TextSelector(
+                    vol.Optional(CONF_COLLECTION_JSON, default=current_json): selector.TextSelector(
                         selector.TextSelectorConfig(multiline=True)
-                    )
+                    ),
+                    vol.Optional(CONF_THEGAMESDB_API_KEY, default=current_api_key): str,
                 }
             ),
             errors=errors,
