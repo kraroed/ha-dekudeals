@@ -138,11 +138,23 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 candidates.append((index, link))
 
         if not candidates:
+            _LOGGER.debug(
+                "DekuDeals metadata refresh for %s: no eligible missing metadata items",
+                self.platform,
+            )
             return enriched
 
         start = self._metadata_cursor % len(candidates)
         selected = (candidates[start:] + candidates[:start])[:METADATA_MAX_PER_REFRESH]
         self._metadata_cursor = (start + len(selected)) % len(candidates)
+        _LOGGER.debug(
+            "DekuDeals metadata refresh for %s: %d items need metadata; selected %d (maximum %d per refresh); TheGamesDB key configured: %s",
+            self.platform,
+            len(candidates),
+            len(selected),
+            METADATA_MAX_PER_REFRESH,
+            bool(self._thegamesdb_api_key),
+        )
         session = async_get_clientsession(self.hass)
         semaphore = asyncio.Semaphore(METADATA_CONCURRENCY)
         if self._thegamesdb_api_key and self._artwork_provider is None:
@@ -150,7 +162,11 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 session, self._thegamesdb_api_key
             )
 
+        artwork_found = 0
+        provider_attempts = 0
+
         async def fetch(index: int, link: str) -> None:
+            nonlocal artwork_found, provider_attempts
             async with semaphore:
                 metadata: dict[str, Any] = {}
                 try:
@@ -161,6 +177,13 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         response.raise_for_status()
                         html = await response.text(errors="ignore")
                     metadata = extract_game_metadata(html, link)
+                    _LOGGER.debug(
+                        "DekuDeals metadata page processed for %r: image=%s, description=%s, item_type=%s",
+                        enriched[index].get("name"),
+                        bool(metadata.get("image")),
+                        bool(metadata.get("description")),
+                        bool(metadata.get("item_type")),
+                    )
                 except (aiohttp.ClientError, asyncio.TimeoutError, UnicodeError) as err:
                     _LOGGER.debug(
                         "Could not retrieve DekuDeals metadata for %s: %s", link, err
@@ -170,6 +193,12 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 # independent box-art provider from finding a verified cover.
                 provider_checked = False
                 if not metadata.get("image") and self._artwork_provider is not None:
+                    provider_attempts += 1
+                    _LOGGER.debug(
+                        "Attempting TheGamesDB front-cover lookup for %r on %r",
+                        enriched[index].get("name"),
+                        enriched[index].get("platform") or self.platform,
+                    )
                     cover = await self._artwork_provider.async_get_front_cover(
                         str(enriched[index].get("name") or ""),
                         str(enriched[index].get("platform") or self.platform),
@@ -177,6 +206,7 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     provider_checked = True
                     if cover:
                         metadata["image"] = cover
+                        artwork_found += 1
 
                 current = enriched[index]
                 for field in ("image", "description", "item_type", "parent_game"):
@@ -197,6 +227,12 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 self._metadata_cache[link] = cache_entry
 
         await asyncio.gather(*(fetch(index, link) for index, link in selected))
+        _LOGGER.debug(
+            "DekuDeals metadata refresh for %s completed: %d TheGamesDB lookups attempted; %d new verified cover URLs found",
+            self.platform,
+            provider_attempts,
+            artwork_found,
+        )
         try:
             await self._metadata_store.async_save(
                 {"items": self._metadata_cache, "cursor": self._metadata_cursor}
