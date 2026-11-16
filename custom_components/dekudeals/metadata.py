@@ -52,7 +52,7 @@ class _MetadataParser(HTMLParser):
                 # a social banner or a full-width promotional image.
                 if width.isdigit() and height.isdigit() and int(height) > 0:
                     ratio = int(width) / int(height)
-                    if ratio <= 0.85:
+                    if 0.48 <= ratio <= 0.85:
                         score += 4
                     else:
                         score = -100

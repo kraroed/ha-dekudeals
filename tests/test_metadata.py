@@ -104,3 +104,13 @@ def test_rejects_page_images_without_dimensions_as_unverified():
     """
     result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
     assert result["image"] is None
+
+
+
+def test_rejects_extremely_narrow_portrait_image_as_not_box_art():
+    html = """
+    <img class="game-cover" alt="Example Game cover art"
+         src="/images/tall-strip.jpg" width="300" height="900">
+    """
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
+    assert result["image"] is None
