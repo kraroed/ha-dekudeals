@@ -124,6 +124,8 @@ def build_reconciliation_plan(
                 "collection_present": True,
                 "needs_review": False,
                 "review_reason": None,
+                "image": new.get("image"),
+                "description": new.get("description"),
             }
         if len(ordered_incoming) > len(ordered_existing):
             creates.extend(ordered_incoming[len(ordered_existing):])
