@@ -103,7 +103,6 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 cached_artwork_verified = cache.get("artwork_verified") is True
                 if (
                     cached_artwork_verified
-                    and not item.get("image")
                     and isinstance(cache.get("image"), str)
                 ):
                     item["image"] = cache["image"]
