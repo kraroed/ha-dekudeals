@@ -31,7 +31,6 @@ def select_thegamesdb_front_cover(
         return None
     games = data.get("games")
     boxart = include.get("boxart")
-    platform_data = include.get("platform")
     if not isinstance(games, list) or not isinstance(boxart, dict):
         return None
     base_urls = boxart.get("base_url")
@@ -39,7 +38,7 @@ def select_thegamesdb_front_cover(
     if not isinstance(base_urls, dict) or not isinstance(image_map, dict):
         return None
     base_url = base_urls.get("original")
-    if not isinstance(base_url, str) or not base_url.startswith("https://"):
+    if not isinstance(base_url, str) or urlparse(base_url).scheme != "https" or not urlparse(base_url).hostname:
         return None
 
     target = normalize_game_title(requested_title)
@@ -71,7 +70,11 @@ def select_thegamesdb_front_cover(
             if not 0.48 <= ratio <= 0.85:
                 continue
             filename = image.get("filename")
-            if not isinstance(filename, str) or not filename or filename.startswith(("/", "\\\\")):
+            if (
+                not isinstance(filename, str)
+                or not filename
+                or filename.startswith(("/", "\\\\"))
+            ):
                 continue
             image_url = urljoin(base_url.rstrip("/") + "/", filename)
             parsed = urlparse(image_url)
