@@ -118,7 +118,9 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             async with semaphore:
                 try:
                     timeout = aiohttp.ClientTimeout(total=20)
-                    async with session.get(link, timeout=timeout) as response:
+                    async with session.get(
+                        link, timeout=timeout, allow_redirects=False
+                    ) as response:
                         response.raise_for_status()
                         html = await response.text(errors="ignore")
                     metadata = extract_game_metadata(html, link)
