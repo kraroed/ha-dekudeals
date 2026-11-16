@@ -18,6 +18,7 @@ class _MetadataParser(HTMLParser):
         self._json_parts: list[str] = []
         self.json_ld: dict[str, str] = {}
         self.text_parts: list[str] = []
+        self.image_candidates: list[tuple[int, str]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = {key.casefold(): value for key, value in attrs if value}
@@ -26,6 +27,30 @@ class _MetadataParser(HTMLParser):
             content = values.get("content")
             if key and content:
                 self.values.setdefault(key, content.strip())
+        elif tag.casefold() == "img":
+            source = (
+                values.get("data-zoom-image")
+                or values.get("data-large-image")
+                or values.get("data-src")
+                or values.get("data-original")
+                or values.get("src")
+            )
+            if source:
+                classes = f"{values.get('class', '')} {values.get('id', '')}".casefold()
+                alt = values.get("alt", "").casefold()
+                score = 0
+                if re.search(r"cover|box[ -]?art|game[ -]?art|product[ -]?image|item[ -]?image", classes):
+                    score += 5
+                if re.search(r"cover|box[ -]?art|game cover|game artwork", alt):
+                    score += 4
+                if re.search(r"banner|logo|avatar|icon|sprite", f"{classes} {alt}"):
+                    score -= 5
+                width = values.get("width", "")
+                height = values.get("height", "")
+                if width.isdigit() and height.isdigit() and int(height) > 0:
+                    ratio = int(width) / int(height)
+                    score += 4 if ratio <= 0.8 else 2 if ratio <= 1.0 else -3 if ratio > 1.2 else 0
+                self.image_candidates.append((score, source.strip()))
         elif tag.casefold() == "script" and values.get("type", "").casefold() == "application/ld+json":
             self._json_ld = True
             self._json_parts = []
@@ -88,11 +113,19 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
     parser.feed(html)
     page_text = " ".join(" ".join(parser.text_parts).split())
 
+    # Prefer an actual portrait cover image found in the page body over
+    # the usually landscape social-sharing image in og:image.
+    image = None
+    if parser.image_candidates:
+        best_score, best_image = max(parser.image_candidates, key=lambda candidate: candidate[0])
+        if best_score >= 4:
+            image = best_image
     image = (
-        parser.values.get("og:image")
+        image
+        or parser.json_ld.get("image")
+        or parser.values.get("og:image")
         or parser.values.get("twitter:image")
         or parser.values.get("twitter:image:src")
-        or parser.json_ld.get("image")
     )
     if image:
         image = urljoin(page_url, image.strip())
@@ -104,8 +137,25 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
     if match:
         description = " ".join(match.group(1).split())[:2000] or None
 
-    dlc_match = re.search(r"\bDLC\s+for\s+(.+?)(?=\s+(?:Details|Current prices|Description)\b|\s+\d+(?:\.\d+)?\s*⭐|$)", page_text, re.IGNORECASE)
-    item_type = "dlc" if dlc_match else "game"
+    dlc_match = re.search(
+        r"\bDLC\s+for\s+(.+?)(?=\s+(?:Details|Current prices|Description)\b|\s+\d+(?:\.\d+)?\s*⭐|$)",
+        page_text,
+        re.IGNORECASE,
+    )
+    page_title = parser.values.get("og:title") or parser.values.get("twitter:title") or ""
+    # DekuDeals does not consistently expose the "DLC for [game]" label in
+    # the same part of the page. Also inspect the title and the actual
+    # Description section for explicit DLC / add-on / expansion wording.
+    dlc_markers = re.compile(
+        r"\b(?:DLC|downloadable content|season pass|expansion pack|add[- ]on)\b",
+        re.IGNORECASE,
+    )
+    is_dlc = bool(
+        dlc_match
+        or dlc_markers.search(page_title)
+        or (description and dlc_markers.search(description))
+    )
+    item_type = "dlc" if is_dlc else "game"
     parent_game = " ".join(dlc_match.group(1).split())[:300] if dlc_match else None
 
     return {
