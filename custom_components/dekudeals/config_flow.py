@@ -7,7 +7,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
-from .const import ALL_PLATFORMS, CONF_COLLECTION_JSON, CONF_COLLECTION_URL, CONF_PLATFORM, DOMAIN
+from .const import CONF_COLLECTION_JSON, CONF_COLLECTION_URL, CONF_PLATFORM, DOMAIN
 from .importer import CollectionImportError, parse_collection_export
 
 
