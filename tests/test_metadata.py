@@ -74,3 +74,14 @@ def test_classifies_season_pass_from_page_title():
     """
     result = extract_game_metadata(html, "https://www.dekudeals.com/items/example-pass")
     assert result["item_type"] == "dlc"
+
+
+
+def test_prefers_portrait_box_art_over_wide_social_image():
+    html = """
+    <meta property="og:image" content="https://cdn.example/wide-social-banner.jpg">
+    <img class="game-cover" alt="Example Game cover art"
+         src="/images/example-box-art.jpg" width="600" height="900">
+    """
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
+    assert result["image"] == "https://www.dekudeals.com/images/example-box-art.jpg"
