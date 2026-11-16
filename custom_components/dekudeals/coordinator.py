@@ -17,7 +17,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
-from .importer import CollectionImportError, parse_collection_export
+from .importer import CollectionImportError, filter_collection_platform, parse_collection_export
 from .metadata import extract_game_metadata, is_dekudeals_item_url
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,8 +36,10 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         collection_url: str,
         fallback_json: str | None = None,
         entry_id: str = "default",
+        platform: str = "Switch",
     ) -> None:
         self.collection_url = collection_url.rstrip("/")
+        self.platform = " ".join((platform or "Switch").split())
         self.fallback_json = fallback_json.strip() if fallback_json else None
         self._metadata_store = Store(
             hass, METADATA_CACHE_VERSION, f"{DOMAIN}_{entry_id}_game_metadata_v4"
@@ -47,7 +49,7 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         super().__init__(
             hass,
             logger=_LOGGER,
-            name=DOMAIN,
+            name=f"{DOMAIN}_{self.platform.casefold().replace(' ', '_')}",
             update_interval=timedelta(hours=6),
         )
 
@@ -184,4 +186,5 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     "Both the live collection and saved export are invalid."
                 ) from fallback_err
 
-        return await self._async_enrich_metadata(items)
+        selected_items = filter_collection_platform(items, self.platform)
+        return await self._async_enrich_metadata(selected_items)
