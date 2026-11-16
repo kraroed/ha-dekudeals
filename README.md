@@ -2,9 +2,9 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.1**
+**Release: 0.4.2**
 
-Version 0.4.1 fixes the integration Configure options flow on current Home Assistant versions, allowing the optional TheGamesDB API key and saved JSON fallback to be managed.
+Version 0.4.2 retries previously missing cover artwork once when a TheGamesDB API key is added, instead of waiting for the normal seven-day missing-art retry window.
 
 The integration reads the public JSON export available by appending `.json` to a DekuDeals collection URL. This is an undocumented export endpoint rather than a supported public API, so DekuDeals may change it without notice. No DekuDeals account credentials are requested or stored.
 
@@ -16,6 +16,7 @@ The integration reads the public JSON export available by appending `.json` to a
 - Normalize missing platform values to `Unknown`.
 - Enrich collection rows with verified portrait artwork, the actual item-page Description text, and DLC classification from public DekuDeals item titles and descriptions.
 - Optional TheGamesDB artwork lookup: when an API key is configured, the integration requests the exact game title and console and accepts only images explicitly marked `boxart` / `front` with portrait dimensions. No approximate title or cross-console matches are accepted.
+- Retry one provider lookup for previously cached missing covers after an API key is added; unsuccessful lookups retain the normal seven-day retry interval.
 - Cache game metadata locally using a fresh versioned cache key so upgrades do not require an unsupported Home Assistant storage migration; fetch at most 20 missing item pages per collection refresh with limited concurrency to avoid excessive requests.
 - Collection count sensors for full games, DLC items, Switch, Switch 2, physical games, and digital games. DLC does not inflate full-game counts.
 - Persistent local physical-copy inventory, separate from the online collection.
@@ -56,11 +57,11 @@ Copy `custom_components/dekudeals` into `<config>/custom_components/dekudeals`, 
 
 You can add the same collection URL more than once, using a different platform each time. Each entry has its own sensors, physical-copy inventory, loans, history, and refresh operation. The original Switch entry keeps its existing identity and stored inventory when upgraded. The integration requests the matching `.json` export automatically. You can optionally paste a saved JSON export during setup as an offline fallback. The integration prefers live data and uses the saved export only when the live request fails.
 
-To replace or clear the fallback later, open the integration's **Configure** options. You can also add an optional [TheGamesDB API key](https://api.thegamesdb.net/) there to enable front-box-art fallback lookups. Without a key, the integration uses only verified portrait artwork found on the DekuDeals item page.
+To replace or clear the fallback later, open the integration's **Configure** options. You can also add an optional [TheGamesDB API key](https://api.thegamesdb.net/) there to enable front-box-art fallback lookups. Without a key, the integration uses only verified portrait artwork found on the DekuDeals item page. After adding a key, refresh the collection to retry previously missing covers; the provider is checked once for those cached misses, and unsuccessful checks are not repeated on every refresh.
 
 ## Supported export format
 
-The export can be either a JSON object containing an `items` array or a top-level JSON array. Each row should contain an item `name`; optional fields include `link`, `added_at`, `format`, `platform`, and `note`. The integration reads cover art from image metadata and extracts descriptions only from the visible Description section of eligible public DekuDeals item pages; it deliberately ignores social/meta descriptions that may contain sale copy. Items are classified as DLC using DekuDeals' “DLC for [game]” label, item title, and actual Description text (including DLC, downloadable content, season pass, expansion pack, and add-on markers). DLC is excluded from full-game, platform, and physical/digital game counts. Metadata lookups are limited to HTTPS `dekudeals.com/items/...` URLs and capped at 20 item pages per six-hour refresh. Successful artwork metadata is cached locally for 30 days; entries without verified artwork are retried after 7 days. A missing or unavailable detail page does not prevent the collection itself from refreshing.
+The export can be either a JSON object containing an `items` array or a top-level JSON array. Each row should contain an item `name`; optional fields include `link`, `added_at`, `format`, `platform`, and `note`. The integration reads cover art from image metadata and extracts descriptions only from the visible Description section of eligible public DekuDeals item pages; it deliberately ignores social/meta descriptions that may contain sale copy. Items are classified as DLC using DekuDeals' “DLC for [game]” label, item title, and actual Description text (including DLC, downloadable content, season pass, expansion pack, and add-on markers). DLC is excluded from full-game, platform, and physical/digital game counts. Metadata lookups are limited to HTTPS `dekudeals.com/items/...` URLs and capped at 20 item pages per six-hour refresh. Successful artwork metadata is cached locally for 30 days; entries without verified artwork are retried after 7 days, except that adding a previously absent TheGamesDB API key triggers one immediate provider check on the next refresh. A missing or unavailable detail page does not prevent the collection itself from refreshing.
 
 Example:
 
