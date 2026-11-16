@@ -77,13 +77,13 @@ def test_accepts_empty_top_level_collection():
 
 
 
-def test_imports_cover_art_but_ignores_untrusted_export_description():
+def test_ignores_untyped_export_artwork_and_description():
     items = parse_collection_export(
         '{"items":[{"name":"Example","image":"https://cdn.example/cover.jpg",'
         '"description":"A great game."}]}'
     )
 
-    assert items[0]["image"] == "https://cdn.example/cover.jpg"
+    assert items[0]["image"] is None
     assert items[0]["description"] is None
     assert items[0]["item_type"] == "game"
     assert items[0]["parent_game"] is None
