@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import CONF_COLLECTION_JSON, CONF_COLLECTION_URL, CONF_PLATFORM, CONF_THEGAMESDB_API_KEY, DOMAIN
+from .const import (\n    CONF_COLLECTION_JSON,\n    CONF_COLLECTION_URL,\n    CONF_PLATFORM,\n    CONF_THEGAMESDB_API_KEY,\n    DOMAIN,\n)
 from .coordinator import DekuDealsCoordinator
 from .inventory import GameInventory
 from .services import async_setup_services
