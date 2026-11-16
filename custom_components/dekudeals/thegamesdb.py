@@ -21,34 +21,46 @@ class TheGamesDBArtworkProvider:
         self._session = session
         self._api_key = api_key.strip()
         self._platform_ids: dict[str, int] | None = None
+        self._platform_lock = asyncio.Lock()
 
     async def _async_get_platform_ids(self) -> dict[str, int]:
         """Load and normalize TheGamesDB platform names once per runtime."""
         if self._platform_ids is not None:
             return self._platform_ids
-        async with self._session.get(
-            f"{_API_BASE}/Platforms",
-            params={"apikey": self._api_key},
-            timeout=aiohttp.ClientTimeout(total=20),
-        ) as response:
-            response.raise_for_status()
-            payload = await response.json(content_type=None)
-        platforms = payload.get("data", {}).get("platforms", {})
-        result: dict[str, int] = {}
-        if isinstance(platforms, dict):
-            for platform in platforms.values():
-                if not isinstance(platform, dict):
-                    continue
-                platform_id = platform.get("id")
-                name = platform.get("name")
-                alias = platform.get("alias")
-                if not isinstance(platform_id, int):
-                    continue
-                for value in (name, alias):
-                    if isinstance(value, str) and value.strip():
-                        result[normalize_game_title(value)] = platform_id
-        self._platform_ids = result
-        return result
+
+        # Multiple game lookups can start together during a collection refresh.
+        # Serialize the initial platform request so we only fetch this catalog once.
+        async with self._platform_lock:
+            if self._platform_ids is not None:
+                return self._platform_ids
+            async with self._session.get(
+                f"{_API_BASE}/Platforms",
+                params={"apikey": self._api_key},
+                timeout=aiohttp.ClientTimeout(total=20),
+            ) as response:
+                response.raise_for_status()
+                payload = await response.json(content_type=None)
+
+            if not isinstance(payload, dict):
+                self._platform_ids = {}
+                return self._platform_ids
+            data = payload.get("data")
+            platforms = data.get("platforms") if isinstance(data, dict) else None
+            result: dict[str, int] = {}
+            if isinstance(platforms, dict):
+                for platform in platforms.values():
+                    if not isinstance(platform, dict):
+                        continue
+                    platform_id = platform.get("id")
+                    name = platform.get("name")
+                    alias = platform.get("alias")
+                    if not isinstance(platform_id, int):
+                        continue
+                    for value in (name, alias):
+                        if isinstance(value, str) and value.strip():
+                            result[normalize_game_title(value)] = platform_id
+            self._platform_ids = result
+            return result
 
     async def async_get_front_cover(self, title: str, platform: str) -> str | None:
         """Return a trusted exact-match front cover, or None on any mismatch."""
@@ -63,7 +75,8 @@ class TheGamesDBArtworkProvider:
                 # DekuDeals uses the shorter console label. Accept only a
                 # whole-token prefix/suffix match, never fuzzy similarity.
                 matches = {
-                    value for key, value in platform_ids.items()
+                    value
+                    for key, value in platform_ids.items()
                     if key.endswith(f" {requested_platform}")
                     or requested_platform.endswith(f" {key}")
                 }
@@ -82,9 +95,16 @@ class TheGamesDBArtworkProvider:
                 timeout=aiohttp.ClientTimeout(total=20),
             ) as response:
                 response.raise_for_status()
-                payload: dict[str, Any] = await response.json(content_type=None)
+                payload: Any = await response.json(content_type=None)
             return select_thegamesdb_front_cover(payload, title, platform_id)
-        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, TypeError, KeyError) as err:
+        except (
+            aiohttp.ClientError,
+            asyncio.TimeoutError,
+            ValueError,
+            TypeError,
+            KeyError,
+            AttributeError,
+        ) as err:
             _LOGGER.debug(
                 "TheGamesDB artwork lookup failed for %s (%s): %s",
                 title,
