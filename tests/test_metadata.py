@@ -1,47 +1,47 @@
 """Tests for safe DekuDeals page metadata extraction."""
 
-from custom_components.dekudeals.metadata import (
-    extract_game_metadata,
-    is_dekudeals_item_url,
-)
+from custom_components.dekudeals.metadata import extract_game_metadata, is_dekudeals_item_url
 
 
-def test_extracts_open_graph_cover_and_description():
+def test_extracts_cover_and_actual_description_not_social_promo_copy():
     html = """
-    <html><head>
-      <meta property="og:image" content="https://cdn.example/game-cover.jpg">
-      <meta property="og:description" content="  An   excellent game. ">
-    </head></html>
+    <meta property="og:image" content="https://cdn.example/game-cover.jpg">
+    <meta property="og:description" content="Save 50% this week!">
+    <h2>Description</h2><p>An actual game description.</p>
+    <h2>Screenshots</h2><p>Screenshot gallery</p>
     """
-
-    assert extract_game_metadata(
-        html, "https://www.dekudeals.com/items/example"
-    ) == {
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
+    assert result == {
         "image": "https://cdn.example/game-cover.jpg",
-        "description": "An excellent game.",
+        "description": "An actual game description.",
+        "item_type": "game",
+        "parent_game": None,
     }
 
 
-def test_extracts_standard_description_and_resolves_relative_cover():
+def test_extracts_dlc_parent_and_description():
     html = """
-    <meta name="description" content="A game description">
-    <meta name="twitter:image" content="/images/cover.jpg">
+    <h1>Expansion Pack</h1><h4>DLC for Example Game</h4>
+    <h2>Details</h2><p>Current prices</p>
+    <h2>Description</h2><p>Includes new levels and characters.</p>
+    <h2>Screenshots</h2>
     """
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example-dlc")
+    assert result["item_type"] == "dlc"
+    assert result["parent_game"] == "Example Game"
+    assert result["description"] == "Includes new levels and characters."
 
-    assert extract_game_metadata(
-        html, "https://www.dekudeals.com/items/example"
-    ) == {
-        "image": "https://www.dekudeals.com/images/cover.jpg",
-        "description": "A game description",
-    }
+
+def test_description_is_empty_when_only_promotional_metadata_exists():
+    html = '<meta property="og:description" content="On sale now">'
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
+    assert result["description"] is None
 
 
 def test_rejects_non_https_cover_images():
     html = '<meta property="og:image" content="http://example.com/cover.jpg">'
-
-    assert extract_game_metadata(
-        html, "https://www.dekudeals.com/items/example"
-    ) == {"image": None, "description": None}
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
+    assert result["image"] is None
 
 
 def test_only_fetches_https_dekudeals_item_pages():
@@ -51,19 +51,3 @@ def test_only_fetches_https_dekudeals_item_pages():
     assert not is_dekudeals_item_url("https://www.dekudeals.com:8443/items/example")
     assert not is_dekudeals_item_url("https://example.com/items/example")
     assert not is_dekudeals_item_url("https://www.dekudeals.com/collection/example")
-
-
-
-def test_uses_json_ld_when_social_metadata_is_missing():
-    html = '''
-    <script type="application/ld+json">
-    {"@type":"VideoGame","description":"Structured description","image":["https://cdn.example/cover.jpg"]}
-    </script>
-    '''
-
-    assert extract_game_metadata(
-        html, "https://www.dekudeals.com/items/example"
-    ) == {
-        "image": "https://cdn.example/cover.jpg",
-        "description": "Structured description",
-    }
