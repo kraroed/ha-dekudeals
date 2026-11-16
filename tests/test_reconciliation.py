@@ -113,3 +113,88 @@ def test_confirmed_not_present_copy_is_not_rematched():
 
     assert len(plan["creates"]) == 1
     assert plan["updates"] == {}
+
+
+
+def test_confirmed_not_present_copy_is_not_recreated_on_repeated_refresh():
+    """A manually rejected match must not cause duplicate copies every refresh."""
+    identity = build_reconciliation_plan([_item()], {})["creates"][0]["identity"]
+    rejected = {
+        **_copy("copy-rejected", identity),
+        "collection_present": False,
+        "match_confirmed": True,
+    }
+
+    first = build_reconciliation_plan([_item()], {"copy-rejected": rejected})
+    assert len(first["creates"]) == 1
+    assert first["updates"] == {}
+
+    created = first["creates"][0]
+    replacement = _copy("copy-replacement", identity)
+    replacement.update(
+        source_fingerprint=created["fingerprint"],
+        collection_present=True,
+        match_confirmed=False,
+    )
+    second = build_reconciliation_plan(
+        [_item()], {"copy-rejected": rejected, "copy-replacement": replacement}
+    )
+
+    assert second["creates"] == []
+    assert second["ambiguous"] == set()
+    assert second["updates"]["copy-replacement"]["collection_present"] is True
+
+
+def test_confirmed_present_copy_is_stable_across_refreshes():
+    identity = build_reconciliation_plan([_item()], {})["creates"][0]["identity"]
+    confirmed = {
+        **_copy("copy-confirmed", identity),
+        "collection_present": True,
+        "match_confirmed": True,
+    }
+
+    first = build_reconciliation_plan([_item()], {"copy-confirmed": confirmed})
+    assert first["creates"] == []
+    assert first["ambiguous"] == set()
+
+    second = build_reconciliation_plan([_item()], {"copy-confirmed": confirmed})
+    assert second["creates"] == []
+    assert second["ambiguous"] == set()
+
+
+def test_removed_collection_row_flags_copy_without_overwriting_active_loan():
+    identity = build_reconciliation_plan([_item()], {})["creates"][0]["identity"]
+    loan = {
+        "borrower": "Alex",
+        "lent_at": "2026-01-01T00:00:00+00:00",
+        "due_date": "2026-01-10",
+        "notes": "Keep this loan",
+    }
+    copy = _copy("copy-on-loan", identity, loan)
+
+    plan = build_reconciliation_plan([], {"copy-on-loan": copy})
+
+    assert plan["creates"] == []
+    assert plan["updates"]["copy-on-loan"] == {
+        "collection_present": False,
+        "needs_review": True,
+        "review_reason": "missing_from_collection",
+    }
+    assert copy["active_loan"] == loan
+
+
+
+def test_reconciliation_updates_existing_copy_metadata_without_losing_notes():
+    imported = {
+        **_item(),
+        "image": "https://cdn.example/cover.jpg",
+        "description": "A game description.",
+    }
+    identity = build_reconciliation_plan([imported], {})["creates"][0]["identity"]
+    existing = _copy("copy-metadata", identity)
+
+    plan = build_reconciliation_plan([imported], {"copy-metadata": existing})
+
+    assert plan["updates"]["copy-metadata"]["image"] == imported["image"]
+    assert plan["updates"]["copy-metadata"]["description"] == imported["description"]
+    assert existing["notes"] == "keep my notes"

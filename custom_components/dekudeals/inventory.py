@@ -89,6 +89,15 @@ class GameInventory:
                 raise InventoryError("Inventory match confirmation is invalid.")
             if item.get("notes") is not None and not isinstance(item.get("notes"), str):
                 raise InventoryError("Inventory notes must be text.")
+            if item.get("description") is not None and not isinstance(
+                item.get("description"), str
+            ):
+                raise InventoryError("Inventory game description must be text.")
+            if item.get("image") is not None and (
+                not isinstance(item.get("image"), str)
+                or not item["image"].startswith("https://")
+            ):
+                raise InventoryError("Inventory cover image must use HTTPS.")
             if not isinstance(item.get("created_at"), str):
                 raise InventoryError("Inventory creation timestamp is missing.")
 
@@ -293,6 +302,8 @@ class GameInventory:
                     "needs_review": False,
                     "review_reason": None,
                     "notes": item.get("note"),
+                    "image": item.get("image"),
+                    "description": item.get("description"),
                     "active_loan": None,
                     "created_at": _now(),
                 }

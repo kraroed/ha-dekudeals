@@ -10,6 +10,21 @@ class CollectionImportError(ValueError):
     """Raised when a collection export is invalid."""
 
 
+def _optional_text(value: Any) -> str | None:
+    """Return bounded, normalized optional text."""
+    if not isinstance(value, str):
+        return None
+    value = " ".join(value.split())
+    return value[:2000] or None
+
+
+def _optional_https_url(value: Any) -> str | None:
+    """Return only absolute HTTPS image URLs."""
+    if not isinstance(value, str) or not value.startswith("https://"):
+        return None
+    return value[:2048]
+
+
 def parse_collection_export(raw: str) -> list[dict[str, Any]]:
     """Parse an exported collection while preserving row order and duplicates."""
     try:
@@ -42,6 +57,8 @@ def parse_collection_export(raw: str) -> list[dict[str, Any]]:
                 "format": game_format,
                 "platform": str(item.get("platform") or "Unknown").strip() or "Unknown",
                 "note": item.get("note") if isinstance(item.get("note"), str) else None,
+                "image": _optional_https_url(item.get("image") or item.get("image_url") or item.get("cover")),
+                "description": _optional_text(item.get("description") or item.get("summary")),
                 "source_index": index,
             }
         )

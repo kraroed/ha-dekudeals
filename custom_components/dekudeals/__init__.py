@@ -33,7 +33,9 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     fallback_json = entry.options.get(
         CONF_COLLECTION_JSON, entry.data.get(CONF_COLLECTION_JSON)
     )
-    coordinator = DekuDealsCoordinator(hass, collection_url, fallback_json)
+    coordinator = DekuDealsCoordinator(
+        hass, collection_url, fallback_json, entry_id=entry.entry_id
+    )
     await coordinator.async_config_entry_first_refresh()
 
     inventory = GameInventory(hass, entry.entry_id)

@@ -152,3 +152,62 @@ def test_rejects_malformed_persisted_inventory():
 
     with pytest.raises(InventoryError):
         _new_inventory("broken")
+
+
+def test_malformed_storage_is_not_overwritten_during_load():
+    malformed = {
+        "schema_version": 1,
+        "copies": {"broken": {"copy_id": "broken", "format": "digital"}},
+        "history": [],
+    }
+    STORE_DATA["dekudeals_broken_inventory"] = deepcopy(malformed)
+
+    with pytest.raises(InventoryError):
+        _new_inventory("broken")
+
+    assert STORE_DATA["dekudeals_broken_inventory"] == malformed
+
+
+def test_removed_imported_copy_retains_active_loan_and_history():
+    inventory = _new_inventory()
+    imported = {
+        "name": "Borrowed Game",
+        "format": "physical",
+        "platform": "Switch",
+        "link": "https://www.dekudeals.com/items/borrowed-game",
+        "added_at": "2026-01-01",
+    }
+    asyncio.run(inventory.async_reconcile_collection([imported]))
+    copy_id = next(iter(inventory.snapshot()["copies"]))
+
+    asyncio.run(inventory.async_lend_copy(copy_id, "Alex", "2026-12-01"))
+    before = inventory.snapshot()
+
+    result = asyncio.run(inventory.async_reconcile_collection([]))
+    after = inventory.snapshot()
+
+    assert result["created"] == 0
+    assert after["copies"][copy_id]["collection_present"] is False
+    assert after["copies"][copy_id]["needs_review"] is True
+    assert after["copies"][copy_id]["active_loan"] == before["copies"][copy_id]["active_loan"]
+    assert after["history"] == before["history"]
+
+
+
+def test_imported_physical_copy_persists_artwork_and_description():
+    inventory = _new_inventory()
+    imported = {
+        "name": "Artwork Game",
+        "format": "physical",
+        "platform": "Switch",
+        "link": "https://www.dekudeals.com/items/artwork-game",
+        "added_at": "2026-01-01",
+        "image": "https://cdn.example/artwork.jpg",
+        "description": "A short game description.",
+    }
+
+    asyncio.run(inventory.async_reconcile_collection([imported]))
+    copy = next(iter(inventory.snapshot()["copies"].values()))
+
+    assert copy["image"] == imported["image"]
+    assert copy["description"] == imported["description"]
