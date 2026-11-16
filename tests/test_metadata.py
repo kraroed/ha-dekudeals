@@ -12,7 +12,7 @@ def test_extracts_cover_and_actual_description_not_social_promo_copy():
     """
     result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
     assert result == {
-        "image": "https://cdn.example/game-cover.jpg",
+        "image": None,
         "description": "An actual game description.",
         "item_type": "game",
         "parent_game": None,
@@ -77,7 +77,7 @@ def test_classifies_season_pass_from_page_title():
 
 
 
-def test_prefers_portrait_box_art_over_wide_social_image():
+def test_prefers_verified_portrait_box_art_over_wide_social_image():
     html = """
     <meta property="og:image" content="https://cdn.example/wide-social-banner.jpg">
     <img class="game-cover" alt="Example Game cover art"
@@ -85,3 +85,22 @@ def test_prefers_portrait_box_art_over_wide_social_image():
     """
     result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
     assert result["image"] == "https://www.dekudeals.com/images/example-box-art.jpg"
+
+
+def test_rejects_landscape_page_image_even_when_marked_as_cover():
+    html = """
+    <meta property="og:image" content="https://cdn.example/wide-social-banner.jpg">
+    <img class="game-cover" alt="Example Game cover art"
+         src="/images/wide-banner.jpg" width="1200" height="600">
+    """
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
+    assert result["image"] is None
+
+
+def test_rejects_page_images_without_dimensions_as_unverified():
+    html = """
+    <img class="game-cover" alt="Example Game cover art"
+         src="/images/unknown-dimensions.jpg">
+    """
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example")
+    assert result["image"] is None
