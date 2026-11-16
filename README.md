@@ -2,7 +2,7 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Current version: 0.3.2**
+**Current released version: 0.3.3**
 
 The integration reads the public JSON export available by appending `.json` to a DekuDeals collection URL. This is an undocumented export endpoint rather than a supported public API, so DekuDeals may change it without notice. No DekuDeals account credentials are requested or stored.
 
@@ -58,7 +58,7 @@ To replace or clear the fallback later, open the integration's **Configure** opt
 
 ## Supported export format
 
-The export can be either a JSON object containing an `items` array or a top-level JSON array. Each row should contain an item `name`; optional fields include `link`, `added_at`, `format`, `platform`, and `note`. The integration reads cover art from image metadata and extracts descriptions only from the visible Description section of eligible public DekuDeals item pages; it deliberately ignores social/meta descriptions that may contain sale copy. Items are classified as DLC using DekuDeals' “DLC for [game]” label, item title, and actual Description text (including DLC, downloadable content, season pass, expansion pack, and add-on markers). DLC is excluded from full-game, platform, and physical/digital game counts. Metadata lookups are limited to HTTPS `dekudeals.com/items/...` URLs, cached locally for 30 days, and capped at 20 item pages per six-hour refresh. A missing or unavailable detail page does not prevent the collection itself from refreshing.
+The export can be either a JSON object containing an `items` array or a top-level JSON array. Each row should contain an item `name`; optional fields include `link`, `added_at`, `format`, `platform`, and `note`. The integration reads cover art from image metadata and extracts descriptions only from the visible Description section of eligible public DekuDeals item pages; it deliberately ignores social/meta descriptions that may contain sale copy. Items are classified as DLC using DekuDeals' “DLC for [game]” label, item title, and actual Description text (including DLC, downloadable content, season pass, expansion pack, and add-on markers). DLC is excluded from full-game, platform, and physical/digital game counts. Metadata lookups are limited to HTTPS `dekudeals.com/items/...` URLs and capped at 20 item pages per six-hour refresh. Successful artwork metadata is cached locally for 30 days; entries without verified artwork are retried after 7 days. A missing or unavailable detail page does not prevent the collection itself from refreshing.
 
 Example:
 
