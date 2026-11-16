@@ -65,3 +65,17 @@ def parse_collection_export(raw: str) -> list[dict[str, Any]]:
             }
         )
     return normalized
+
+
+def filter_collection_platform(
+    items: list[dict[str, Any]], platform: str | None
+) -> list[dict[str, Any]]:
+    """Return only one console's rows, or all rows when requested."""
+    selected = " ".join((platform or "Switch").split()).casefold()
+    if selected == "all platforms":
+        return list(items)
+    return [
+        item for item in items
+        if " ".join(str(item.get("platform") or "Unknown").split()).casefold()
+        == selected
+    ]
