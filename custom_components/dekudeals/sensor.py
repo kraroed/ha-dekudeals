@@ -53,6 +53,9 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
     """Represent a collection count."""
 
     _attr_has_entity_name = True
+    # Collection data is consumed live by the Lovelace card, not useful in history.
+    # Excluding it prevents large collections from exceeding Recorder's 16 KiB limit.
+    _unrecorded_attributes = frozenset({"items"})
 
     def __init__(self, coordinator, entry_id, description):
         super().__init__(coordinator)
@@ -108,6 +111,9 @@ class InventorySensor(SensorEntity):
     """Expose a live view of persistent physical game inventory."""
 
     _attr_has_entity_name = True
+    # Detailed inventory and event lists remain available to the card at runtime,
+    # but should not be duplicated into Recorder history.
+    _unrecorded_attributes = frozenset({"copies", "recent_events"})
 
     def __init__(self, inventory, entry_id, description):
         self.inventory = inventory
