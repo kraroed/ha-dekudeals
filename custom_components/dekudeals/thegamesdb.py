@@ -60,6 +60,10 @@ class TheGamesDBArtworkProvider:
                         if isinstance(value, str) and value.strip():
                             result[normalize_game_title(value)] = platform_id
             self._platform_ids = result
+            _LOGGER.debug(
+                "TheGamesDB platform catalog loaded: %d normalized platform names",
+                len(result),
+            )
             return result
 
     async def async_get_front_cover(self, title: str, platform: str) -> str | None:
@@ -83,7 +87,16 @@ class TheGamesDBArtworkProvider:
                 if len(matches) == 1:
                     platform_id = matches.pop()
             if platform_id is None:
+                _LOGGER.debug(
+                    "TheGamesDB has no platform mapping for DekuDeals platform %r",
+                    platform,
+                )
                 return None
+            _LOGGER.debug(
+                "TheGamesDB platform mapping for %r resolved to ID %s",
+                platform,
+                platform_id,
+            )
             async with self._session.get(
                 f"{_API_BASE}/Games/ByGameName",
                 params={
@@ -96,7 +109,21 @@ class TheGamesDBArtworkProvider:
             ) as response:
                 response.raise_for_status()
                 payload: Any = await response.json(content_type=None)
-            return select_thegamesdb_front_cover(payload, title, platform_id)
+            games = (
+                payload.get("data", {}).get("games", [])
+                if isinstance(payload, dict)
+                else []
+            )
+            game_count = len(games) if isinstance(games, list) else 0
+            cover = select_thegamesdb_front_cover(payload, title, platform_id)
+            _LOGGER.debug(
+                "TheGamesDB lookup for %r on platform ID %s returned %d game candidates; verified front cover %s",
+                title,
+                platform_id,
+                game_count,
+                "found" if cover else "not found (no exact-title portrait front box art passed validation)",
+            )
+            return cover
         except (
             aiohttp.ClientError,
             asyncio.TimeoutError,
