@@ -46,11 +46,12 @@ Copy `custom_components/dekudeals` into `<config>/custom_components/dekudeals`, 
 
 1. In Home Assistant, open **Settings → Devices & services → Add integration**.
 2. Search for **DekuDeals**.
-3. Enter your public collection URL, for example:
+3. Enter the console/platform exactly as it appears in your DekuDeals export (for example `Switch`, `Switch 2`, or `PlayStation 5`). Choose `All Platforms` to include the entire collection.
+4. Enter your public collection URL, for example:
 
    `https://www.dekudeals.com/collection/your-collection-id`
 
-The integration requests the matching `.json` export automatically. You can optionally paste a saved JSON export during setup as an offline fallback. The integration prefers live data and uses the saved export only when the live request fails.
+You can add the same collection URL more than once, using a different platform each time. Each entry has its own sensors, physical-copy inventory, loans, history, and refresh operation. The original Switch entry keeps its existing identity and stored inventory when upgraded. The integration requests the matching `.json` export automatically. You can optionally paste a saved JSON export during setup as an offline fallback. The integration prefers live data and uses the saved export only when the live request fails.
 
 To replace or clear the fallback later, open the integration's **Configure** options.
 
