@@ -181,3 +181,20 @@ def test_removed_collection_row_flags_copy_without_overwriting_active_loan():
         "review_reason": "missing_from_collection",
     }
     assert copy["active_loan"] == loan
+
+
+
+def test_reconciliation_updates_existing_copy_metadata_without_losing_notes():
+    imported = {
+        **_item(),
+        "image": "https://cdn.example/cover.jpg",
+        "description": "A game description.",
+    }
+    identity = build_reconciliation_plan([imported], {})["creates"][0]["identity"]
+    existing = _copy("copy-metadata", identity)
+
+    plan = build_reconciliation_plan([imported], {"copy-metadata": existing})
+
+    assert plan["updates"]["copy-metadata"]["image"] == imported["image"]
+    assert plan["updates"]["copy-metadata"]["description"] == imported["description"]
+    assert existing["notes"] == "keep my notes"
