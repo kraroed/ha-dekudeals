@@ -211,3 +211,26 @@ def test_imported_physical_copy_persists_artwork_and_description():
 
     assert copy["image"] == imported["image"]
     assert copy["description"] == imported["description"]
+
+
+def test_separate_config_entries_keep_inventory_and_loans_isolated():
+    switch_inventory = _new_inventory("legacy-switch-entry")
+    playstation_inventory = _new_inventory("playstation-entry")
+
+    switch_copy = asyncio.run(
+        switch_inventory.async_register_copy("Example Game", "Switch")
+    )
+    playstation_copy = asyncio.run(
+        playstation_inventory.async_register_copy("Example Game", "PlayStation 5")
+    )
+    asyncio.run(switch_inventory.async_lend_copy(switch_copy, "Alex"))
+
+    reloaded_switch = _new_inventory("legacy-switch-entry")
+    reloaded_playstation = _new_inventory("playstation-entry")
+
+    assert set(reloaded_switch.snapshot()["copies"]) == {switch_copy}
+    assert set(reloaded_playstation.snapshot()["copies"]) == {playstation_copy}
+    assert reloaded_switch.snapshot()["copies"][switch_copy]["active_loan"]["borrower"] == "Alex"
+    assert reloaded_playstation.snapshot()["copies"][playstation_copy]["active_loan"] is None
+    assert reloaded_switch.snapshot()["history"][0]["borrower"] == "Alex"
+    assert reloaded_playstation.snapshot()["history"] == []
