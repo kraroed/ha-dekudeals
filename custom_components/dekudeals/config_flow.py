@@ -89,14 +89,11 @@ class DekuDealsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     def async_get_options_flow(config_entry):
         """Return the options flow for updating an offline fallback export."""
-        return DekuDealsOptionsFlow(config_entry)
+        return DekuDealsOptionsFlow()
 
 
 class DekuDealsOptionsFlow(config_entries.OptionsFlow):
     """Update or clear the optional saved JSON fallback and artwork API key."""
-
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         """Validate and save options."""
