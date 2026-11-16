@@ -104,7 +104,7 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
     if match:
         description = " ".join(match.group(1).split())[:2000] or None
 
-    dlc_match = re.search(r"\bDLC\s+for\s+(.+?)(?:\s+(?:Details|Current prices|Description)\b|$)", page_text, re.IGNORECASE)
+    dlc_match = re.search(r"\bDLC\s+for\s+(.+?)(?=\s+(?:Details|Current prices|Description)\b|\s+\d+(?:\.\d+)?\s*⭐|$)", page_text, re.IGNORECASE)
     item_type = "dlc" if dlc_match else "game"
     parent_game = " ".join(dlc_match.group(1).split())[:300] if dlc_match else None
 
