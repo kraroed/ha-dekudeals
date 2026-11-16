@@ -48,6 +48,7 @@ def test_only_fetches_https_dekudeals_item_pages():
     assert is_dekudeals_item_url("https://www.dekudeals.com/items/example")
     assert is_dekudeals_item_url("https://dekudeals.com/items/example")
     assert not is_dekudeals_item_url("http://www.dekudeals.com/items/example")
+    assert not is_dekudeals_item_url("https://www.dekudeals.com:8443/items/example")
     assert not is_dekudeals_item_url("https://example.com/items/example")
     assert not is_dekudeals_item_url("https://www.dekudeals.com/collection/example")
 
