@@ -83,7 +83,9 @@ def test_imports_cover_art_but_ignores_untrusted_export_description():
     )
 
     assert items[0]["image"] == "https://cdn.example/cover.jpg"
-    assert items[0]["description"] is None\n    assert items[0]["item_type"] == "game"\n    assert items[0]["parent_game"] is None
+    assert items[0]["description"] is None
+    assert items[0]["item_type"] == "game"
+    assert items[0]["parent_game"] is None
 
 
 def test_rejects_non_https_or_invalid_optional_metadata():
