@@ -16,7 +16,8 @@ COLLECTION_DESCRIPTIONS = (
     SensorEntityDescription(key="switch_games", name="Switch Games", icon="mdi:gamepad"),
     SensorEntityDescription(key="switch_2_games", name="Switch 2 Games", icon="mdi:gamepad"),
     SensorEntityDescription(key="physical_games", name="Physical Games", icon="mdi:gamepad"),
-    SensorEntityDescription(key="digital_games", name="Digital Games", icon="mdi:download"),\n    SensorEntityDescription(key="dlc_items", name="DLC Items", icon="mdi:download-box"),
+    SensorEntityDescription(key="digital_games", name="Digital Games", icon="mdi:download"),
+    SensorEntityDescription(key="dlc_items", name="DLC Items", icon="mdi:download-box"),
 )
 
 INVENTORY_DESCRIPTIONS = (
