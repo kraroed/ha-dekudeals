@@ -240,18 +240,32 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 # Preserve previously fetched descriptions and DLC metadata
                 # when a transient page failure prevents refreshing them.
                 previous_cache = self._metadata_cache.get(link)
-                cache_entry = (
-                    {
-                        key: value
-                        for key, value in previous_cache.items()
-                        if key not in {"image", "artwork_verified"}
-                    }
-                    if isinstance(previous_cache, dict)
-                    else {}
+                previous_artwork_verified = bool(
+                    isinstance(previous_cache, dict)
+                    and previous_cache.get("artwork_verified") is True
+                    and previous_cache.get("image")
                 )
-                cache_entry.update(metadata)
+                cache_entry = (
+                    dict(previous_cache)
+                    if isinstance(previous_cache, dict) and previous_artwork_verified
+                    else (
+                        {
+                            key: value
+                            for key, value in previous_cache.items()
+                            if key not in {"image", "artwork_verified"}
+                        }
+                        if isinstance(previous_cache, dict)
+                        else {}
+                    )
+                )
+                cache_entry.update(
+                    {key: value for key, value in metadata.items() if value is not None}
+                )
                 cache_entry["checked_at"] = time.time()
-                cache_entry["artwork_verified"] = bool(metadata.get("image"))
+                cache_entry["artwork_verified"] = bool(
+                    cache_entry.get("image")
+                    and (metadata.get("image") or previous_artwork_verified)
+                )
                 cache_entry["artwork_revalidated_at"] = time.time()
                 if provider_checked:
                     cache_entry["thegamesdb_checked_at"] = time.time()
