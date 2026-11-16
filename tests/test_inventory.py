@@ -191,3 +191,23 @@ def test_removed_imported_copy_retains_active_loan_and_history():
     assert after["copies"][copy_id]["needs_review"] is True
     assert after["copies"][copy_id]["active_loan"] == before["copies"][copy_id]["active_loan"]
     assert after["history"] == before["history"]
+
+
+
+def test_imported_physical_copy_persists_artwork_and_description():
+    inventory = _new_inventory()
+    imported = {
+        "name": "Artwork Game",
+        "format": "physical",
+        "platform": "Switch",
+        "link": "https://www.dekudeals.com/items/artwork-game",
+        "added_at": "2026-01-01",
+        "image": "https://cdn.example/artwork.jpg",
+        "description": "A short game description.",
+    }
+
+    asyncio.run(inventory.async_reconcile_collection([imported]))
+    copy = next(iter(inventory.snapshot()["copies"].values()))
+
+    assert copy["image"] == imported["image"]
+    assert copy["description"] == imported["description"]
