@@ -74,16 +74,19 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
         """Return the count for this sensor."""
         items = self.coordinator.data or []
         key = self.entity_description.key
+        games = [item for item in items if item.get("item_type") != "dlc"]
         if key == "games":
-            return len(items)
+            return len(games)
+        if key == "dlc_items":
+            return sum(item.get("item_type") == "dlc" for item in items)
         if key == "switch_games":
-            return sum(item["platform"].casefold() == "switch" for item in items)
+            return sum(item["platform"].casefold() == "switch" for item in games)
         if key == "switch_2_games":
-            return sum(item["platform"].casefold() == "switch 2" for item in items)
+            return sum(item["platform"].casefold() == "switch 2" for item in games)
         if key == "physical_games":
-            return sum(item["format"] == "physical" for item in items)
+            return sum(item["format"] == "physical" for item in games)
         if key == "digital_games":
-            return sum(item["format"] == "digital" for item in items)
+            return sum(item["format"] == "digital" for item in games)
         return 0
 
     @property
