@@ -7,7 +7,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
-from .const import CONF_COLLECTION_JSON, CONF_COLLECTION_URL, CONF_PLATFORM, CONF_THEGAMESDB_API_KEY, DOMAIN
+from .const import (\n    CONF_COLLECTION_JSON,\n    CONF_COLLECTION_URL,\n    CONF_PLATFORM,\n    CONF_THEGAMESDB_API_KEY,\n    DOMAIN,\n)
 from .importer import CollectionImportError, parse_collection_export
 
 
