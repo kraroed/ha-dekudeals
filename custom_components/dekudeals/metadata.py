@@ -117,7 +117,9 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
     # the usually landscape social-sharing image in og:image.
     image = None
     if parser.image_candidates:
-        _, image = max(parser.image_candidates, key=lambda candidate: candidate[0])
+        best_score, best_image = max(parser.image_candidates, key=lambda candidate: candidate[0])
+        if best_score >= 4:
+            image = best_image
     image = (
         image
         or parser.json_ld.get("image")
