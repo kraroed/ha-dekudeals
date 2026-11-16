@@ -5,6 +5,7 @@
         "title": "Import your DekuDeals collection",
         "description": "Enter your public DekuDeals collection URL. The integration fetches its JSON export automatically; a saved JSON export is optional as an offline fallback.",
         "data": {
+          "platform": "Console/platform (use All Platforms to include everything)",
           "collection_url": "DekuDeals collection URL",
           "collection_json": "Optional saved JSON fallback"
         }
