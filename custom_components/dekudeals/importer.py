@@ -58,7 +58,9 @@ def parse_collection_export(raw: str) -> list[dict[str, Any]]:
                 "platform": str(item.get("platform") or "Unknown").strip() or "Unknown",
                 "note": item.get("note") if isinstance(item.get("note"), str) else None,
                 "image": _optional_https_url(item.get("image") or item.get("image_url") or item.get("cover")),
-                "description": _optional_text(item.get("description") or item.get("summary")),
+                "description": None,
+                "item_type": "game",
+                "parent_game": None,
                 "source_index": index,
             }
         )

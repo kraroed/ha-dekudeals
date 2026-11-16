@@ -21,7 +21,7 @@ from .importer import CollectionImportError, parse_collection_export
 from .metadata import extract_game_metadata, is_dekudeals_item_url
 
 _LOGGER = logging.getLogger(__name__)
-METADATA_CACHE_VERSION = 1
+METADATA_CACHE_VERSION = 2
 METADATA_MAX_PER_REFRESH = 20
 METADATA_CONCURRENCY = 3
 METADATA_CACHE_TTL = 30 * 24 * 60 * 60
