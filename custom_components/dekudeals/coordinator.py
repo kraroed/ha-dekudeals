@@ -97,7 +97,15 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 continue
             cache = self._metadata_cache.get(link)
             if cache:
-                if not item.get("image") and isinstance(cache.get("image"), str):
+                # Older releases cached image URLs without recording whether
+                # they were verified front covers. Never continue displaying
+                # those legacy URLs as artwork.
+                cached_artwork_verified = cache.get("artwork_verified") is True
+                if (
+                    cached_artwork_verified
+                    and not item.get("image")
+                    and isinstance(cache.get("image"), str)
+                ):
                     item["image"] = cache["image"]
                 if not item.get("description") and isinstance(cache.get("description"), str):
                     item["description"] = cache["description"]
@@ -116,7 +124,11 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             # appear without waiting a full month.
             cache_ttl = (
                 METADATA_CACHE_TTL
-                if isinstance(cache, dict) and cache.get("image")
+                if (
+                    isinstance(cache, dict)
+                    and cache.get("image")
+                    and cache.get("artwork_verified") is True
+                )
                 else METADATA_MISS_RETRY_TTL
             )
             cache_is_fresh = (
@@ -134,7 +146,20 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 and not cache.get("thegamesdb_checked_at")
                 and not item.get("image")
             )
-            if missing and (not cache_is_fresh or provider_needs_check):
+            # One-time migration for legacy cached URLs: re-fetch the product
+            # page and query TheGamesDB instead of trusting an image whose
+            # dimensions and front-cover status were never verified.
+            legacy_artwork_needs_check = bool(
+                isinstance(cache, dict)
+                and isinstance(cache.get("image"), str)
+                and cache.get("artwork_verified") is not True
+                and not cache.get("artwork_revalidated_at")
+            )
+            if missing and (
+                not cache_is_fresh
+                or provider_needs_check
+                or legacy_artwork_needs_check
+            ):
                 candidates.append((index, link))
 
         if not candidates:
@@ -212,10 +237,22 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 for field in ("image", "description", "item_type", "parent_game"):
                     if metadata.get(field) is not None:
                         current[field] = metadata[field]
-                cache_entry = {
-                    **metadata,
-                    "checked_at": time.time(),
-                }
+                # Preserve previously fetched descriptions and DLC metadata
+                # when a transient page failure prevents refreshing them.
+                previous_cache = self._metadata_cache.get(link)
+                cache_entry = (
+                    {
+                        key: value
+                        for key, value in previous_cache.items()
+                        if key not in {"image", "artwork_verified"}
+                    }
+                    if isinstance(previous_cache, dict)
+                    else {}
+                )
+                cache_entry.update(metadata)
+                cache_entry["checked_at"] = time.time()
+                cache_entry["artwork_verified"] = bool(metadata.get("image"))
+                cache_entry["artwork_revalidated_at"] = time.time()
                 if provider_checked:
                     cache_entry["thegamesdb_checked_at"] = time.time()
                 elif isinstance(self._metadata_cache.get(link), dict):
