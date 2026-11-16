@@ -119,14 +119,16 @@ def build_reconciliation_plan(
         ordered_existing = sorted(existing, key=lambda row: row["copy_id"])
         ordered_incoming = sorted(incoming, key=lambda row: row["fingerprint"])
         for old, new in zip(ordered_existing, ordered_incoming):
-            updates[old["copy_id"]] = {
+            changes = {
                 "source_fingerprint": new["fingerprint"],
                 "collection_present": True,
                 "needs_review": False,
                 "review_reason": None,
-                "image": new.get("image"),
-                "description": new.get("description"),
             }
+            for field in ("image", "description"):
+                if new.get(field):
+                    changes[field] = new[field]
+            updates[old["copy_id"]] = changes
         if len(ordered_incoming) > len(ordered_existing):
             creates.extend(ordered_incoming[len(ordered_existing):])
 
