@@ -142,9 +142,11 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             # or waiting for the normal seven-day miss retry interval.
             provider_needs_check = bool(
                 self._thegamesdb_api_key
-                and isinstance(cache, dict)
-                and not cache.get("thegamesdb_checked_at")
-                and not item.get("image")
+                and (
+                    not isinstance(cache, dict)
+                    or not isinstance(cache.get("thegamesdb_checked_at"), (int, float))
+                    or now - cache["thegamesdb_checked_at"] >= METADATA_MISS_RETRY_TTL
+                )
             )
             # One-time migration for legacy cached URLs: re-fetch the product
             # page and query TheGamesDB instead of trusting an image whose
@@ -155,10 +157,9 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 and cache.get("artwork_verified") is not True
                 and not cache.get("artwork_revalidated_at")
             )
-            if missing and (
-                not cache_is_fresh
+            if (
+                (missing and (not cache_is_fresh or legacy_artwork_needs_check))
                 or provider_needs_check
-                or legacy_artwork_needs_check
             ):
                 candidates.append((index, link))
 
@@ -214,27 +215,32 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         "Could not retrieve DekuDeals metadata for %s: %s", link, err
                     )
 
-                # A failed or incomplete DekuDeals page must not prevent the
-                # independent box-art provider from finding a verified cover.
+                # TheGamesDB is the preferred artwork source. Always try it
+                # before accepting DekuDeals artwork, even when the collection
+                # export already contains a landscape/promotional image.
                 provider_checked = False
-                if not metadata.get("image") and self._artwork_provider is not None:
+                provider_cover = None
+                if self._artwork_provider is not None:
                     provider_attempts += 1
                     _LOGGER.debug(
                         "Attempting TheGamesDB front-cover lookup for %r on %r",
                         enriched[index].get("name"),
                         enriched[index].get("platform") or self.platform,
                     )
-                    cover = await self._artwork_provider.async_get_front_cover(
+                    provider_cover = await self._artwork_provider.async_get_front_cover(
                         str(enriched[index].get("name") or ""),
                         str(enriched[index].get("platform") or self.platform),
                     )
                     provider_checked = True
-                    if cover:
-                        metadata["image"] = cover
+                    if provider_cover:
                         artwork_found += 1
 
                 current = enriched[index]
-                for field in ("image", "description", "item_type", "parent_game"):
+                fallback_image = metadata.get("image") or current.get("image")
+                selected_image = provider_cover or fallback_image
+                if selected_image:
+                    current["image"] = selected_image
+                for field in ("description", "item_type", "parent_game"):
                     if metadata.get(field) is not None:
                         current[field] = metadata[field]
                 # Preserve previously fetched descriptions and DLC metadata
@@ -259,12 +265,19 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     )
                 )
                 cache_entry.update(
-                    {key: value for key, value in metadata.items() if value is not None}
+                    {key: value for key, value in metadata.items()
+                     if key != "image" and value is not None}
                 )
+                if selected_image:
+                    cache_entry["image"] = selected_image
                 cache_entry["checked_at"] = time.time()
                 cache_entry["artwork_verified"] = bool(
-                    cache_entry.get("image")
-                    and (metadata.get("image") or previous_artwork_verified)
+                    provider_cover or (previous_artwork_verified and not provider_checked)
+                )
+                cache_entry["artwork_source"] = (
+                    "thegamesdb" if provider_cover
+                    else "thegamesdb_unavailable" if provider_checked
+                    else cache_entry.get("artwork_source", "dekudeals")
                 )
                 cache_entry["artwork_revalidated_at"] = time.time()
                 if provider_checked:
