@@ -2,7 +2,7 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Current version: 0.3.0**
+**Current version: 0.3.1**
 
 The integration reads the public JSON export available by appending `.json` to a DekuDeals collection URL. This is an undocumented export endpoint rather than a supported public API, so DekuDeals may change it without notice. No DekuDeals account credentials are requested or stored.
 
@@ -13,7 +13,7 @@ The integration reads the public JSON export available by appending `.json` to a
 - Preserve duplicate collection rows and their original order.
 - Normalize missing platform values to `Unknown`.
 - Enrich collection rows with cover art, the actual item-page Description text, and DLC classification from public DekuDeals item pages.
-- Cache game metadata locally; fetch at most 20 missing item pages per collection refresh with limited concurrency to avoid excessive requests.
+- Cache game metadata locally using a fresh versioned cache key so upgrades do not require an unsupported Home Assistant storage migration; fetch at most 20 missing item pages per collection refresh with limited concurrency to avoid excessive requests.
 - Collection count sensors for full games, DLC items, Switch, Switch 2, physical games, and digital games. DLC does not inflate full-game counts.
 - Persistent local physical-copy inventory, separate from the online collection.
 - Unique IDs for duplicate physical copies.
