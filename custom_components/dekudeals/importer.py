@@ -59,7 +59,8 @@ def parse_collection_export(raw: str) -> list[dict[str, Any]]:
                 "format": game_format,
                 "platform": str(item.get("platform") or "Unknown").strip() or "Unknown",
                 "note": item.get("note") if isinstance(item.get("note"), str) else None,
-                "image": _optional_https_url(item.get("image") or item.get("image_url") or item.get("cover")),
+                # Export image fields are not typed as front-cover artwork; do not trust them.
+                "image": None,
                 "description": None,
                 "item_type": "game",
                 "parent_game": None,
