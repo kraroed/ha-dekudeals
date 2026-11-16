@@ -17,9 +17,9 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
-from .thegamesdb import TheGamesDBArtworkProvider
 from .importer import CollectionImportError, filter_collection_platform, parse_collection_export
 from .metadata import extract_game_metadata, is_dekudeals_item_url
+from .thegamesdb import TheGamesDBArtworkProvider
 
 _LOGGER = logging.getLogger(__name__)
 METADATA_CACHE_VERSION = 2
@@ -29,7 +29,7 @@ METADATA_CACHE_TTL = 30 * 24 * 60 * 60
 
 
 class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
-    """Fetch a public collection and enrich rows with cached page metadata."""
+    """Fetch a public collection and enrich rows with cached game metadata."""
 
     def __init__(
         self,
@@ -104,7 +104,12 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     item["item_type"] = cache["item_type"]
                 if isinstance(cache.get("parent_game"), str):
                     item["parent_game"] = cache["parent_game"]
-            missing = not item.get("image") or not item.get("description") or not cache or not cache.get("item_type")
+            missing = (
+                not item.get("image")
+                or not item.get("description")
+                or not cache
+                or not cache.get("item_type")
+            )
             cache_is_fresh = (
                 isinstance(cache, dict)
                 and isinstance(cache.get("checked_at"), (int, float))
@@ -117,17 +122,18 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             return enriched
 
         start = self._metadata_cursor % len(candidates)
-        selected = (
-            candidates[start:] + candidates[:start]
-        )[:METADATA_MAX_PER_REFRESH]
+        selected = (candidates[start:] + candidates[:start])[:METADATA_MAX_PER_REFRESH]
         self._metadata_cursor = (start + len(selected)) % len(candidates)
         session = async_get_clientsession(self.hass)
         semaphore = asyncio.Semaphore(METADATA_CONCURRENCY)
         if self._thegamesdb_api_key and self._artwork_provider is None:
-            self._artwork_provider = TheGamesDBArtworkProvider(session, self._thegamesdb_api_key)
+            self._artwork_provider = TheGamesDBArtworkProvider(
+                session, self._thegamesdb_api_key
+            )
 
         async def fetch(index: int, link: str) -> None:
             async with semaphore:
+                metadata: dict[str, Any] = {}
                 try:
                     timeout = aiohttp.ClientTimeout(total=20)
                     async with session.get(
@@ -136,10 +142,72 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         response.raise_for_status()
                         html = await response.text(errors="ignore")
                     metadata = extract_game_metadata(html, link)
-                    if not metadata.get("image") and self._artwork_provider is not None:
-                        cover = await self._artwork_provider.async_get_front_cover(
-                            str(enriched[index].get("name") or ""),
-                            str(enriched[index].get("platform") or self.platform),
-                        )
-                        if cover:
-                            metadata["image"] = cover
+                except (aiohttp.ClientError, asyncio.TimeoutError, UnicodeError) as err:
+                    _LOGGER.debug(
+                        "Could not retrieve DekuDeals metadata for %s: %s", link, err
+                    )
+
+                # A failed or incomplete DekuDeals page must not prevent the
+                # independent box-art provider from finding a verified cover.
+                if not metadata.get("image") and self._artwork_provider is not None:
+                    cover = await self._artwork_provider.async_get_front_cover(
+                        str(enriched[index].get("name") or ""),
+                        str(enriched[index].get("platform") or self.platform),
+                    )
+                    if cover:
+                        metadata["image"] = cover
+
+                current = enriched[index]
+                for field in ("image", "description", "item_type", "parent_game"):
+                    if metadata.get(field) is not None:
+                        current[field] = metadata[field]
+                self._metadata_cache[link] = {
+                    **metadata,
+                    "checked_at": time.time(),
+                }
+
+        await asyncio.gather(*(fetch(index, link) for index, link in selected))
+        try:
+            await self._metadata_store.async_save(
+                {"items": self._metadata_cache, "cursor": self._metadata_cursor}
+            )
+        except (OSError, ValueError):
+            _LOGGER.warning("Could not save DekuDeals game metadata cache")
+        return enriched
+
+    async def _async_update_data(self) -> list[dict[str, Any]]:
+        """Fetch the public JSON export, using saved JSON only as fallback."""
+        url = (
+            self.collection_url
+            if self.collection_url.endswith(".json")
+            else f"{self.collection_url}.json"
+        )
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                payload = await response.json(content_type=None)
+            items = parse_collection_export(json.dumps(payload))
+        except (
+            aiohttp.ClientError,
+            asyncio.TimeoutError,
+            json.JSONDecodeError,
+            CollectionImportError,
+        ) as err:
+            if not self.fallback_json:
+                raise UpdateFailed(
+                    f"Unable to refresh DekuDeals collection: {err}"
+                ) from err
+            _LOGGER.warning(
+                "Could not refresh DekuDeals collection; using the saved JSON export: %s",
+                err,
+            )
+            try:
+                items = parse_collection_export(self.fallback_json)
+            except CollectionImportError as fallback_err:
+                raise UpdateFailed(
+                    "Both the live collection and saved export are invalid."
+                ) from fallback_err
+
+        selected_items = filter_collection_platform(items, self.platform)
+        return await self._async_enrich_metadata(selected_items)
