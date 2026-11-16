@@ -40,7 +40,7 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self.collection_url = collection_url.rstrip("/")
         self.fallback_json = fallback_json.strip() if fallback_json else None
         self._metadata_store = Store(
-            hass, METADATA_CACHE_VERSION, f"{DOMAIN}_{entry_id}_game_metadata_v2"
+            hass, METADATA_CACHE_VERSION, f"{DOMAIN}_{entry_id}_game_metadata_v3"
         )
         self._metadata_cache: dict[str, dict[str, Any]] | None = None
         self._metadata_cursor = 0
