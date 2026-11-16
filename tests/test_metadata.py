@@ -51,3 +51,26 @@ def test_only_fetches_https_dekudeals_item_pages():
     assert not is_dekudeals_item_url("https://www.dekudeals.com:8443/items/example")
     assert not is_dekudeals_item_url("https://example.com/items/example")
     assert not is_dekudeals_item_url("https://www.dekudeals.com/collection/example")
+
+
+
+def test_classifies_dlc_when_description_identifies_downloadable_content():
+    html = """
+    <meta property="og:title" content="Example Add-on">
+    <h2>Description</h2>
+    <p>This DLC adds three new characters and an extra campaign.</p>
+    <h2>Screenshots</h2>
+    """
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example-addon")
+    assert result["item_type"] == "dlc"
+    assert result["description"] == "This DLC adds three new characters and an extra campaign."
+
+
+def test_classifies_season_pass_from_page_title():
+    html = """
+    <meta property="og:title" content="Example Game Season Pass">
+    <h2>Description</h2><p>Includes all expansion content.</p>
+    <h2>Screenshots</h2>
+    """
+    result = extract_game_metadata(html, "https://www.dekudeals.com/items/example-pass")
+    assert result["item_type"] == "dlc"
