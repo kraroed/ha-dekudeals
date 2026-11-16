@@ -94,7 +94,11 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     item["image"] = cache["image"]
                 if not item.get("description") and isinstance(cache.get("description"), str):
                     item["description"] = cache["description"]
-            missing = not item.get("image") or not item.get("description")
+                if cache.get("item_type") in {"game", "dlc"}:
+                    item["item_type"] = cache["item_type"]
+                if isinstance(cache.get("parent_game"), str):
+                    item["parent_game"] = cache["parent_game"]
+            missing = not item.get("image") or not item.get("description") or not cache or not cache.get("item_type")
             cache_is_fresh = (
                 isinstance(cache, dict)
                 and isinstance(cache.get("checked_at"), (int, float))
@@ -129,8 +133,8 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     return
 
                 current = enriched[index]
-                for field in ("image", "description"):
-                    if not current.get(field) and metadata.get(field):
+                for field in ("image", "description", "item_type", "parent_game"):
+                    if metadata.get(field) is not None:
                         current[field] = metadata[field]
                 self._metadata_cache[link] = {
                     **metadata,
