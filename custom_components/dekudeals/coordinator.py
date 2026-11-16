@@ -136,68 +136,10 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         response.raise_for_status()
                         html = await response.text(errors="ignore")
                     metadata = extract_game_metadata(html, link)
-                if not metadata.get("image") and self._artwork_provider is not None:
-                    cover = await self._artwork_provider.async_get_front_cover(
-                        str(enriched[index].get("name") or ""),
-                        str(enriched[index].get("platform") or self.platform),
-                    )
-                    if cover:
-                        metadata["image"] = cover
-                except (aiohttp.ClientError, asyncio.TimeoutError, UnicodeError) as err:
-                    _LOGGER.debug("Could not retrieve metadata for %s: %s", link, err)
-                    return
-
-                current = enriched[index]
-                for field in ("image", "description", "item_type", "parent_game"):
-                    if metadata.get(field) is not None:
-                        current[field] = metadata[field]
-                self._metadata_cache[link] = {
-                    **metadata,
-                    "checked_at": time.time(),
-                }
-
-        await asyncio.gather(*(fetch(index, link) for index, link in selected))
-        try:
-            await self._metadata_store.async_save(
-                {"items": self._metadata_cache, "cursor": self._metadata_cursor}
-            )
-        except (OSError, ValueError):
-            _LOGGER.warning("Could not save DekuDeals game metadata cache")
-        return enriched
-
-    async def _async_update_data(self) -> list[dict[str, Any]]:
-        """Fetch the public JSON export, using saved JSON only as fallback."""
-        url = (
-            self.collection_url
-            if self.collection_url.endswith(".json")
-            else f"{self.collection_url}.json"
-        )
-        session = async_get_clientsession(self.hass)
-        try:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                payload = await response.json(content_type=None)
-            items = parse_collection_export(json.dumps(payload))
-        except (
-            aiohttp.ClientError,
-            asyncio.TimeoutError,
-            json.JSONDecodeError,
-            CollectionImportError,
-        ) as err:
-            if not self.fallback_json:
-                raise UpdateFailed(
-                    f"Unable to refresh DekuDeals collection: {err}"
-                ) from err
-            _LOGGER.warning(
-                "Could not refresh DekuDeals collection; using the saved JSON export: %s",
-                err,
-            )
-            try:
-                items = parse_collection_export(self.fallback_json)
-            except CollectionImportError as fallback_err:
-                raise UpdateFailed(
-                    "Both the live collection and saved export are invalid."
-                ) from fallback_err
-
-        selected_items = filter_collection_platform(items, self.platform)
-        return await self._async_enrich_metadata(selected_items)
+                    if not metadata.get("image") and self._artwork_provider is not None:
+                        cover = await self._artwork_provider.async_get_front_cover(
+                            str(enriched[index].get("name") or ""),
+                            str(enriched[index].get("platform") or self.platform),
+                        )
+                        if cover:
+                            metadata["image"] = cover
