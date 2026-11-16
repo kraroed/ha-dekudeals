@@ -1,14 +1,15 @@
-"""Extract lightweight cover-art and description metadata from DekuDeals pages."""
+"""Extract cover art, item type, and store description from DekuDeals pages."""
 
 from __future__ import annotations
 
 import json
+import re
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
 
 class _MetadataParser(HTMLParser):
-    """Read Open Graph, Twitter Card, and standard description metadata."""
+    """Read image metadata, JSON-LD, and visible page text."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -16,6 +17,7 @@ class _MetadataParser(HTMLParser):
         self._json_ld = False
         self._json_parts: list[str] = []
         self.json_ld: dict[str, str] = {}
+        self.text_parts: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = {key.casefold(): value for key, value in attrs if value}
@@ -31,6 +33,8 @@ class _MetadataParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._json_ld:
             self._json_parts.append(data)
+        else:
+            self.text_parts.append(data)
 
     def handle_endtag(self, tag: str) -> None:
         if tag.casefold() == "script" and self._json_ld:
@@ -43,9 +47,6 @@ class _MetadataParser(HTMLParser):
             for record in records:
                 if not isinstance(record, dict):
                     continue
-                description = record.get("description")
-                if isinstance(description, str):
-                    self.json_ld.setdefault("description", description)
                 image = record.get("image")
                 if isinstance(image, str):
                     self.json_ld.setdefault("image", image)
@@ -77,9 +78,15 @@ def is_dekudeals_item_url(value: str | None) -> bool:
 
 
 def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
-    """Extract a safe image URL and a concise description from page metadata."""
+    """Extract cover art, DLC classification, and the actual Description section.
+
+    Social metadata is intentionally not used for descriptions: DekuDeals uses
+    those fields for promotional/sale copy. The visible Description section is
+    the product description supplied on the item page.
+    """
     parser = _MetadataParser()
     parser.feed(html)
+    page_text = " ".join(" ".join(parser.text_parts).split())
 
     image = (
         parser.values.get("og:image")
@@ -87,20 +94,23 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
         or parser.values.get("twitter:image:src")
         or parser.json_ld.get("image")
     )
-    description = (
-        parser.values.get("og:description")
-        or parser.values.get("description")
-        or parser.values.get("twitter:description")
-        or parser.json_ld.get("description")
-    )
-
     if image:
         image = urljoin(page_url, image.strip())
-        parsed_image = urlparse(image)
-        if parsed_image.scheme != "https":
+        if urlparse(image).scheme != "https":
             image = None
 
-    if description:
-        description = " ".join(description.split())[:2000] or None
+    description = None
+    match = re.search(r"\bDescription\s*(.*?)\s*Screenshots\b", page_text, re.IGNORECASE)
+    if match:
+        description = " ".join(match.group(1).split())[:2000] or None
 
-    return {"image": image, "description": description}
+    dlc_match = re.search(r"\bDLC\s+for\s+(.+?)(?:\s+(?:Details|Current prices|Description)\b|$)", page_text, re.IGNORECASE)
+    item_type = "dlc" if dlc_match else "game"
+    parent_game = " ".join(dlc_match.group(1).split())[:300] if dlc_match else None
+
+    return {
+        "image": image,
+        "description": description,
+        "item_type": item_type,
+        "parent_game": parent_game,
+    }
