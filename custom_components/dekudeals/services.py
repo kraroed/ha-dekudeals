@@ -97,8 +97,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def refresh(call: ServiceCall) -> None:
-        entry_id, data = _get_inventory(hass, call)
-        await data["coordinator"].async_request_refresh()
+        entry_id, _inventory = _get_inventory(hass, call)
+        entry = hass.data[DOMAIN]["entries"][entry_id]
+        await entry["coordinator"].async_request_refresh()
 
     common = {vol.Optional(ATTR_CONFIG_ENTRY_ID): str}
     hass.services.async_register(
