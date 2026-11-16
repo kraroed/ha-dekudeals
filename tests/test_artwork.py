@@ -27,7 +27,7 @@ def test_selects_front_boxart_with_portrait_dimensions():
     result = select_thegamesdb_front_cover(
         _payload([
             {"type": "boxart", "side": "back", "filename": "back.jpg", "resolution": "600x900"},
-            {"type": "boxart", "side": "front", "filename": "front.jpg", "resolution": "600x900"},
+            {"type": "boxart", "side": "front", "filename": "boxart/front.jpg", "resolution": "600x900"},
         ]),
         "Example Game",
         4919,
