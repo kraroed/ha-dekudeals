@@ -102,7 +102,9 @@ class DekuDealsOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(CONF_COLLECTION_JSON, default=current_json): selector.TextSelector(
                         selector.TextSelectorConfig(multiline=True)
                     ),
-                    vol.Optional(CONF_THEGAMESDB_API_KEY, default=current_api_key): str,
+                    vol.Optional(CONF_THEGAMESDB_API_KEY, default=current_api_key): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                    ),
                 }
             ),
             errors=errors,
