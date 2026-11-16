@@ -64,7 +64,8 @@ class TheGamesDBArtworkProvider:
                 # whole-token prefix/suffix match, never fuzzy similarity.
                 matches = {
                     value for key, value in platform_ids.items()
-                    if key.endswith(f" {requested_platform}") or requested_platform.endswith(f" {key}")
+                    if key.endswith(f" {requested_platform}")
+                    or requested_platform.endswith(f" {key}")
                 }
                 if len(matches) == 1:
                     platform_id = matches.pop()
@@ -84,5 +85,10 @@ class TheGamesDBArtworkProvider:
                 payload: dict[str, Any] = await response.json(content_type=None)
             return select_thegamesdb_front_cover(payload, title, platform_id)
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, TypeError, KeyError) as err:
-            _LOGGER.debug("TheGamesDB artwork lookup failed for %s (%s): %s", title, platform, err)
+            _LOGGER.debug(
+                "TheGamesDB artwork lookup failed for %s (%s): %s",
+                title,
+                platform,
+                err,
+            )
             return None
