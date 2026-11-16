@@ -138,7 +138,7 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
         description = " ".join(match.group(1).split())[:2000] or None
 
     dlc_match = re.search(
-        r"\\bDLC\\s+for\\s+(.+?)(?=\\s+(?:Details|Current prices|Description)\\b|\\s+\\d+(?:\\.\\d+)?\\s*⭐|$)",
+        r"\bDLC\s+for\s+(.+?)(?=\s+(?:Details|Current prices|Description)\b|\s+\d+(?:\.\d+)?\s*⭐|$)",
         page_text,
         re.IGNORECASE,
     )
@@ -147,7 +147,7 @@ def extract_game_metadata(html: str, page_url: str) -> dict[str, str | None]:
     # the same part of the page. Also inspect the title and the actual
     # Description section for explicit DLC / add-on / expansion wording.
     dlc_markers = re.compile(
-        r"\\b(?:DLC|downloadable content|season pass|expansion pack|add[- ]on)\\b",
+        r"\b(?:DLC|downloadable content|season pass|expansion pack|add[- ]on)\b",
         re.IGNORECASE,
     )
     is_dlc = bool(
