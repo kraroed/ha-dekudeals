@@ -76,14 +76,14 @@ def test_accepts_empty_top_level_collection():
 
 
 
-def test_imports_optional_cover_art_and_description():
+def test_imports_cover_art_but_ignores_untrusted_export_description():
     items = parse_collection_export(
         '{"items":[{"name":"Example","image":"https://cdn.example/cover.jpg",'
         '"description":"A great game."}]}'
     )
 
     assert items[0]["image"] == "https://cdn.example/cover.jpg"
-    assert items[0]["description"] == "A great game."
+    assert items[0]["description"] is None\n    assert items[0]["item_type"] == "game"\n    assert items[0]["parent_game"] is None
 
 
 def test_rejects_non_https_or_invalid_optional_metadata():
