@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 import aiohttp
@@ -22,24 +23,36 @@ class TheGamesDBArtworkProvider:
         self._api_key = api_key.strip()
         self._platform_ids: dict[str, int] | None = None
         self._platform_lock = asyncio.Lock()
+        self._platform_retry_after = 0.0
 
     async def _async_get_platform_ids(self) -> dict[str, int]:
         """Load and normalize TheGamesDB platform names once per runtime."""
-        if self._platform_ids is not None:
+        if self._platform_ids is not None and time.monotonic() < self._platform_retry_after:
+            return self._platform_ids
+        if self._platform_ids is not None and self._platform_retry_after == 0:
             return self._platform_ids
 
         # Multiple game lookups can start together during a collection refresh.
         # Serialize the initial platform request so we only fetch this catalog once.
         async with self._platform_lock:
-            if self._platform_ids is not None:
+            if self._platform_ids is not None and time.monotonic() < self._platform_retry_after:
                 return self._platform_ids
-            async with self._session.get(
-                f"{_API_BASE}/Platforms",
-                params={"apikey": self._api_key},
-                timeout=aiohttp.ClientTimeout(total=20),
-            ) as response:
-                response.raise_for_status()
-                payload = await response.json(content_type=None)
+            if self._platform_ids is not None and self._platform_retry_after == 0:
+                return self._platform_ids
+            try:
+                async with self._session.get(
+                    f"{_API_BASE}/Platforms",
+                    params={"apikey": self._api_key},
+                    timeout=aiohttp.ClientTimeout(total=20),
+                ) as response:
+                    response.raise_for_status()
+                    payload = await response.json(content_type=None)
+            except (aiohttp.ClientError, asyncio.TimeoutError):
+                # Cache transient failures briefly so each game lookup in the
+                # same refresh does not serialize another 20-second timeout.
+                self._platform_ids = {}
+                self._platform_retry_after = time.monotonic() + 60
+                raise
 
             if not isinstance(payload, dict):
                 self._platform_ids = {}
@@ -60,6 +73,7 @@ class TheGamesDBArtworkProvider:
                         if isinstance(value, str) and value.strip():
                             result[normalize_game_title(value)] = platform_id
             self._platform_ids = result
+            self._platform_retry_after = 0.0
             _LOGGER.debug(
                 "TheGamesDB platform catalog loaded: %d normalized platform names",
                 len(result),
