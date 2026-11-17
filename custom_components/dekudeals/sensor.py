@@ -49,7 +49,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
         for description in COLLECTION_DESCRIPTIONS
     ]
     entities.extend(
-        InventorySensor(inventory, entry.entry_id, description)
+        InventorySensor(
+            inventory,
+            entry.entry_id,
+            description,
+            entry_data["artwork_proxy_secret"],
+        )
         for description in INVENTORY_DESCRIPTIONS
     )
     async_add_entities(entities)
@@ -127,8 +132,9 @@ class InventorySensor(SensorEntity):
     _attr_has_entity_name = True
     _unrecorded_attributes = frozenset({"copies", "recent_events"})
 
-    def __init__(self, inventory, entry_id, description):
+    def __init__(self, inventory, entry_id, description, artwork_proxy_secret):
         self.inventory = inventory
+        self._artwork_proxy_secret = artwork_proxy_secret
         self.entity_description = description
         self._entry_id = entry_id
         self._attr_unique_id = f"{entry_id}_{description.key}"
@@ -223,7 +229,16 @@ class InventorySensor(SensorEntity):
             }
         else:
             selected = copies
+        exposed_copies = []
+        for source_copy in selected[:MAX_LIST_ITEMS]:
+            copy = dict(source_copy)
+            image_url = copy.get("image")
+            if isinstance(image_url, str):
+                copy["image"] = build_artwork_proxy_url(
+                    self._entry_id, self._artwork_proxy_secret, image_url
+                )
+            exposed_copies.append(copy)
         return {
-            "copies": selected[:MAX_LIST_ITEMS],
+            "copies": exposed_copies,
             "items_truncated": len(selected) > MAX_LIST_ITEMS,
         }
