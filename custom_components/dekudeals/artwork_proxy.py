@@ -21,7 +21,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 MAX_ARTWORK_BYTES = 8 * 1024 * 1024
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-_FILENAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+_ARTWORK_PATH_RE = re.compile(r"^/images/original/boxart/front/[A-Za-z0-9_-][A-Za-z0-9._-]*$")
 
 
 def _is_allowed_artwork_url(value: str) -> bool:
@@ -36,8 +36,7 @@ def _is_allowed_artwork_url(value: str) -> bool:
         and parsed.port is None
         and parsed.username is None
         and parsed.password is None
-        and parsed.path.startswith("/images/original/boxart/front/")
-        and _FILENAME_RE.fullmatch(parsed.path.rsplit("/", 1)[-1])
+        and _ARTWORK_PATH_RE.fullmatch(parsed.path)
         and not parsed.query
         and not parsed.fragment
     )
@@ -71,7 +70,12 @@ class DekuDealsArtworkView(HomeAssistantView):
         secret = entry_data.get("artwork_proxy_secret") if entry_data else None
         encoded = request.query.get("url", "")
         supplied_signature = request.query.get("sig", "")
-        if not isinstance(secret, bytes) or not encoded or not supplied_signature:
+        if (
+            not isinstance(secret, bytes)
+            or not encoded
+            or len(encoded) > 4096
+            or not supplied_signature
+        ):
             raise web.HTTPNotFound()
         try:
             padded = encoded + "=" * (-len(encoded) % 4)
