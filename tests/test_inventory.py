@@ -270,4 +270,4 @@ def test_concurrent_collection_refresh_preserves_loan_and_history():
         assert final["history"][0]["borrower"] == "Alex"
         assert final["history"][1]["borrower"] == "Alex"
 
-    asyncio.run(refresh_and_lend())
+    asyncio.run(asyncio.wait_for(refresh_and_lend(), timeout=5))
