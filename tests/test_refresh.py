@@ -36,7 +36,7 @@ def test_refresh_service_waits_for_inventory_reconciliation():
         await service
         assert completed == [True]
 
-    asyncio.run(run())
+    asyncio.run(asyncio.wait_for(run(), timeout=5))
 
 
 def test_refresh_service_propagates_reconciliation_failure():
@@ -52,7 +52,7 @@ def test_refresh_service_propagates_reconciliation_failure():
         with pytest.raises(ReconciliationFailed, match="inventory reconciliation failed"):
             await async_refresh_and_reconcile(entry_data, refresh)
 
-    asyncio.run(run())
+    asyncio.run(asyncio.wait_for(run(), timeout=5))
 
 
 def test_overlapping_manual_refreshes_are_serialized():
@@ -78,7 +78,7 @@ def test_overlapping_manual_refreshes_are_serialized():
         assert maximum_active == 1
         assert order == ["start", "end", "start", "end"]
 
-    asyncio.run(run())
+    asyncio.run(asyncio.wait_for(run(), timeout=5))
 
 
 
@@ -90,4 +90,4 @@ def test_collection_refresh_failure_is_not_misreported_as_reconciliation_failure
         with pytest.raises(ConnectionError, match="DekuDeals is unreachable"):
             await async_refresh_and_reconcile({}, refresh)
 
-    asyncio.run(run())
+    asyncio.run(asyncio.wait_for(run(), timeout=5))
