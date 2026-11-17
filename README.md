@@ -2,7 +2,10 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.8**
+**Release: 0.4.10**
+
+Version 0.4.10 restores TheGamesDB artwork through the signed, same-origin Home Assistant proxy. The proxy follows up to three redirects only when every destination remains an approved HTTPS TheGamesDB front-cover URL. It validates image content types and enforces an 8 MiB response limit. Collection data, cached artwork metadata, physical inventory, loans, and lending history are preserved.
+
 
 Version 0.4.8 serves TheGamesDB front-cover images through a signed, same-origin Home Assistant endpoint. This avoids direct CDN image requests from the Home Assistant app while restricting the proxy to approved HTTPS front-cover URLs. Redirects are disabled, and image content type and response size are checked. The original cached image URLs, collection data, and physical inventory remain unchanged.
 
