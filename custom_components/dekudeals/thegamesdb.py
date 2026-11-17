@@ -124,6 +124,16 @@ class TheGamesDBArtworkProvider:
                 "found" if cover else "not found (no exact-title portrait front box art passed validation)",
             )
             return cover
+        except aiohttp.ClientResponseError as err:
+            # Never include request parameters or the API key in diagnostics.
+            _LOGGER.warning(
+                "TheGamesDB returned HTTP %s while looking up artwork for %r (%s). "
+                "Check the configured API key and TheGamesDB service access.",
+                err.status,
+                title,
+                platform,
+            )
+            return None
         except (
             aiohttp.ClientError,
             asyncio.TimeoutError,
@@ -133,7 +143,7 @@ class TheGamesDBArtworkProvider:
             AttributeError,
         ) as err:
             _LOGGER.debug(
-                "TheGamesDB artwork lookup failed for %s (%s): %s",
+                "TheGamesDB artwork lookup failed for %r (%s): %s",
                 title,
                 platform,
                 err,
