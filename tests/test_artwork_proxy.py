@@ -11,6 +11,7 @@ from custom_components.dekudeals.artwork_proxy import (
     is_allowed_artwork_url,
     _safe_redirect_target,
     TheGamesDBArtworkView,
+    _async_read_bounded_image,
 )
 from custom_components.dekudeals.const import DOMAIN
 
@@ -62,6 +63,34 @@ def test_allows_only_same_host_front_cover_redirects():
         source, "https://cdn.thegamesdb.net/images/original/boxart/back/cover.jpg"
     ) is None
     assert _safe_redirect_target(source, None) is None
+
+
+class _ChunkedContent:
+    """Minimal async content stream used to test chunked image reads."""
+
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    async def iter_chunked(self, _size):
+        for chunk in self._chunks:
+            yield chunk
+
+
+def test_proxy_reads_complete_image_across_chunks():
+    """Do not return only the first chunk of a streamed image."""
+    content = _ChunkedContent([b"image-header", b"image-middle", b"image-end"])
+    assert asyncio.run(_async_read_bounded_image(content)) == (
+        b"image-headerimage-middleimage-end"
+    )
+
+
+def test_proxy_rejects_oversized_chunked_image():
+    """Enforce the maximum even when a response is streamed in chunks."""
+    from custom_components.dekudeals.artwork_proxy import _MAX_IMAGE_BYTES
+
+    content = _ChunkedContent([b"x" * (_MAX_IMAGE_BYTES + 1)])
+    with pytest.raises(web.HTTPBadGateway):
+        asyncio.run(_async_read_bounded_image(content))
 
 
 def test_view_reads_hass_from_request_app():
