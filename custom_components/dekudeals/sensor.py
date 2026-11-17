@@ -44,7 +44,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         for description in COLLECTION_DESCRIPTIONS
     ]
     entities.extend(
-        InventorySensor(inventory, entry.entry_id, description)
+        InventorySensor(hass, inventory, entry.entry_id, description)
         for description in INVENTORY_DESCRIPTIONS
     )
     async_add_entities(entities)
@@ -119,7 +119,8 @@ class InventorySensor(SensorEntity):
     _attr_has_entity_name = True
     _unrecorded_attributes = frozenset({"copies", "recent_events"})
 
-    def __init__(self, inventory, entry_id, description):
+    def __init__(self, hass, inventory, entry_id, description):
+        self.hass = hass
         self.inventory = inventory
         self.entity_description = description
         self._entry_id = entry_id
@@ -216,6 +217,16 @@ class InventorySensor(SensorEntity):
         else:
             selected = copies
         return {
-            "copies": selected[:MAX_LIST_ITEMS],
+            "copies": [
+                {
+                    **copy,
+                    **(
+                        {"image": artwork_proxy_url(self.hass, self._entry_id, copy["image"])}
+                        if isinstance(copy.get("image"), str)
+                        else {}
+                    ),
+                }
+                for copy in selected[:MAX_LIST_ITEMS]
+            ],
             "items_truncated": len(selected) > MAX_LIST_ITEMS,
         }
