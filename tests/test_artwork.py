@@ -67,3 +67,18 @@ def test_rejects_untrusted_image_hosts_and_bad_dimensions():
         {"type": "boxart", "side": "front", "filename": "front.jpg", "resolution": "wide"},
     ])
     assert select_thegamesdb_front_cover(payload, "Example Game", 4919) is None
+
+
+
+def test_accepts_explicit_front_cover_when_resolution_is_omitted():
+    """TheGamesDB image resolution metadata is optional."""
+    payload = _payload([
+        {
+            "type": "boxart",
+            "side": "front",
+            "filename": "boxart/front-no-resolution.jpg",
+        }
+    ])
+    assert select_thegamesdb_front_cover(payload, "Example Game", 4919) == (
+        "https://cdn.example/images/original/boxart/front-no-resolution.jpg"
+    )

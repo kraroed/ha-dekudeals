@@ -23,7 +23,7 @@ from .thegamesdb import TheGamesDBArtworkProvider
 
 _LOGGER = logging.getLogger(__name__)
 METADATA_CACHE_VERSION = 2
-METADATA_MAX_PER_REFRESH = 20
+METADATA_MAX_PER_REFRESH = 50
 METADATA_CONCURRENCY = 3
 METADATA_CACHE_TTL = 30 * 24 * 60 * 60
 METADATA_MISS_RETRY_TTL = 7 * 24 * 60 * 60
@@ -80,6 +80,21 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             self._metadata_cursor = max(0, stored.get("cursor", 0))
         else:
             self._metadata_cache = {}
+
+    async def async_refresh_artwork(self) -> None:
+        """Force a fresh TheGamesDB lookup without clearing saved metadata."""
+        await self._async_load_metadata_cache()
+        assert self._metadata_cache is not None
+        for cache_entry in self._metadata_cache.values():
+            cache_entry.pop("thegamesdb_checked_at", None)
+            cache_entry.pop("checked_at", None)
+        self._metadata_cursor = 0
+        _LOGGER.info(
+            "Starting forced artwork refresh for %s (%d cached game entries)",
+            self.platform,
+            len(self._metadata_cache),
+        )
+        await self.async_request_refresh()
 
     async def _async_enrich_metadata(
         self, items: list[dict[str, Any]]

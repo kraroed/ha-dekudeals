@@ -101,6 +101,11 @@ def async_setup_services(hass: HomeAssistant) -> None:
         entry = hass.data[DOMAIN]["entries"][entry_id]
         await entry["coordinator"].async_request_refresh()
 
+    async def refresh_artwork(call: ServiceCall) -> None:
+        entry_id, _inventory = _get_inventory(hass, call)
+        entry = hass.data[DOMAIN]["entries"][entry_id]
+        await entry["coordinator"].async_refresh_artwork()
+
     common = {vol.Optional(ATTR_CONFIG_ENTRY_ID): str}
     hass.services.async_register(
         DOMAIN,
@@ -167,5 +172,11 @@ def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN,
         "refresh_collection",
         refresh,
+        schema=vol.Schema(common),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "refresh_artwork",
+        refresh_artwork,
         schema=vol.Schema(common),
     )
