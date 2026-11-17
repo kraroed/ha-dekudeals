@@ -15,7 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .artwork_proxy import _safe_redirect_target, is_allowed_artwork_url
 from .const import DOMAIN
 from .inventory import GameInventory, InventoryError
-from .refresh import async_refresh_and_reconcile
+from .refresh import ReconciliationFailed, async_refresh_and_reconcile
 
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_COPY_ID = "copy_id"
@@ -99,7 +99,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         """Wait for collection refresh and durable inventory reconciliation."""
         try:
             await async_refresh_and_reconcile(entry_data, refresh_method)
-        except Exception as err:
+        except ReconciliationFailed as err:
             raise HomeAssistantError(
                 "The collection refreshed, but inventory reconciliation failed. "
                 "Check the DekuDeals integration log before retrying."
