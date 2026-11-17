@@ -9,6 +9,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .artwork_proxy import build_artwork_proxy_url
 from .const import DOMAIN, MAX_LIST_ITEMS
 
 COLLECTION_DESCRIPTIONS = (
@@ -39,11 +40,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = entry_data["coordinator"]
     inventory = entry_data["inventory"]
     entities = [
-        DekuDealsSensor(coordinator, entry.entry_id, description)
+        DekuDealsSensor(
+            coordinator,
+            entry.entry_id,
+            description,
+            entry_data["artwork_proxy_secret"],
+        )
         for description in COLLECTION_DESCRIPTIONS
     ]
     entities.extend(
-        InventorySensor(inventory, entry.entry_id, description)
+        InventorySensor(
+            inventory,
+            entry.entry_id,
+            description,
+            entry_data["artwork_proxy_secret"],
+        )
         for description in INVENTORY_DESCRIPTIONS
     )
     async_add_entities(entities)
@@ -53,14 +64,13 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
     """Represent a collection count."""
 
     _attr_has_entity_name = True
-    # Collection data is consumed live by the Lovelace card, not useful in history.
-    # Excluding it prevents large collections from exceeding Recorder's 16 KiB limit.
     _unrecorded_attributes = frozenset({"items"})
 
-    def __init__(self, coordinator, entry_id, description):
+    def __init__(self, coordinator, entry_id, description, artwork_proxy_secret):
         super().__init__(coordinator)
         self.entity_description = description
         self._entry_id = entry_id
+        self._artwork_proxy_secret = artwork_proxy_secret
         self._attr_unique_id = f"{entry_id}_{description.key}"
 
     @property
@@ -97,10 +107,19 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        """Expose a bounded snapshot of the imported collection."""
+        """Expose a bounded snapshot with same-origin URLs for TheGamesDB art."""
         items = self.coordinator.data or []
+        exposed_items = []
+        for source_item in items[:MAX_LIST_ITEMS]:
+            item = dict(source_item)
+            image_url = item.get("image")
+            if isinstance(image_url, str):
+                item["image"] = build_artwork_proxy_url(
+                    self._entry_id, self._artwork_proxy_secret, image_url
+                )
+            exposed_items.append(item)
         return {
-            "items": items[:MAX_LIST_ITEMS],
+            "items": exposed_items,
             "items_truncated": len(items) > MAX_LIST_ITEMS,
             "source": "DekuDeals JSON export",
             "configured_platform": self.coordinator.platform,
@@ -111,12 +130,11 @@ class InventorySensor(SensorEntity):
     """Expose a live view of persistent physical game inventory."""
 
     _attr_has_entity_name = True
-    # Detailed inventory and event lists remain available to the card at runtime,
-    # but should not be duplicated into Recorder history.
     _unrecorded_attributes = frozenset({"copies", "recent_events"})
 
-    def __init__(self, inventory, entry_id, description):
+    def __init__(self, inventory, entry_id, description, artwork_proxy_secret):
         self.inventory = inventory
+        self._artwork_proxy_secret = artwork_proxy_secret
         self.entity_description = description
         self._entry_id = entry_id
         self._attr_unique_id = f"{entry_id}_{description.key}"
@@ -211,7 +229,16 @@ class InventorySensor(SensorEntity):
             }
         else:
             selected = copies
+        exposed_copies = []
+        for source_copy in selected[:MAX_LIST_ITEMS]:
+            copy = dict(source_copy)
+            image_url = copy.get("image")
+            if isinstance(image_url, str):
+                copy["image"] = build_artwork_proxy_url(
+                    self._entry_id, self._artwork_proxy_secret, image_url
+                )
+            exposed_copies.append(copy)
         return {
-            "copies": selected[:MAX_LIST_ITEMS],
+            "copies": exposed_copies,
             "items_truncated": len(selected) > MAX_LIST_ITEMS,
         }

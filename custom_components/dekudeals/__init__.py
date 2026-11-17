@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
@@ -18,6 +19,7 @@ from .const import (
 from .coordinator import DekuDealsCoordinator
 from .inventory import GameInventory
 from .services import async_setup_services
+from .artwork_proxy import TheGamesDBArtworkView
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,9 +28,10 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the integration domain and register its services."""
+    """Set up the integration domain, artwork endpoint, and services."""
     hass.data.setdefault(DOMAIN, {"entries": {}})
     hass.data[DOMAIN].setdefault("entries", {})
+    hass.http.register_view(TheGamesDBArtworkView())
     async_setup_services(hass)
     return True
 
@@ -57,6 +60,9 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     hass.data[DOMAIN].setdefault("entries", {})[entry.entry_id] = {
         "coordinator": coordinator,
         "inventory": inventory,
+        # The unauthenticated image endpoint requires this unguessable,
+        # runtime-only secret for every individual config entry.
+        "artwork_proxy_secret": secrets.token_urlsafe(32),
     }
 
     async def _async_reconcile_updated_collection() -> None:
