@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import secrets
 
@@ -19,6 +18,7 @@ from .const import (
 )
 from .coordinator import DekuDealsCoordinator
 from .inventory import GameInventory
+from .lifecycle import ReconciliationTaskTracker
 from .services import async_setup_services
 from .artwork_proxy import TheGamesDBArtworkView
 
@@ -58,11 +58,13 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     await inventory.async_reconcile_collection(coordinator.data or [])
 
     hass.data.setdefault(DOMAIN, {"entries": {}})
+    tracker = ReconciliationTaskTracker()
     entry_data = {
         "coordinator": coordinator,
         "inventory": inventory,
-        "reconciliation_tasks": set(),
+        "reconciliation_tracker": tracker,
         "reconciliation_task": None,
+        "refresh_lock": None,
         # The unauthenticated image endpoint requires this unguessable,
         # runtime-only secret for every individual config entry.
         "artwork_proxy_secret": secrets.token_urlsafe(32),
@@ -78,17 +80,10 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
             raise
         async_dispatcher_send(hass, f"{DOMAIN}_{entry.entry_id}_inventory_updated")
 
-    def _reconciliation_finished(task: asyncio.Task) -> None:
-        entry_data["reconciliation_tasks"].discard(task)
-        if not task.cancelled():
-            # Retrieve background exceptions to avoid an unhandled-task warning.
-            task.exception()
-
     def _handle_coordinator_update() -> None:
         task = hass.async_create_task(_async_reconcile_updated_collection())
         entry_data["reconciliation_task"] = task
-        entry_data["reconciliation_tasks"].add(task)
-        task.add_done_callback(_reconciliation_finished)
+        tracker.add(task)
 
     entry.async_on_unload(coordinator.async_add_listener(_handle_coordinator_update))
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
@@ -107,8 +102,6 @@ async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
         return False
     entry_data = hass.data[DOMAIN]["entries"].get(entry.entry_id)
     if entry_data is not None:
-        tasks = tuple(entry_data.get("reconciliation_tasks", ()))
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+        await entry_data["reconciliation_tracker"].async_wait()
     hass.data[DOMAIN]["entries"].pop(entry.entry_id, None)
     return True
