@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import secrets
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
+from .artwork_proxy import DekuDealsArtworkView
 from .const import (
     CONF_COLLECTION_JSON,
     CONF_COLLECTION_URL,
@@ -26,9 +28,12 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the integration domain and register its services."""
-    hass.data.setdefault(DOMAIN, {"entries": {}})
-    hass.data[DOMAIN].setdefault("entries", {})
+    """Set up the integration domain and register its services and image view."""
+    domain_data = hass.data.setdefault(DOMAIN, {"entries": {}})
+    domain_data.setdefault("entries", {})
+    if not domain_data.get("artwork_view_registered"):
+        hass.http.register_view(DekuDealsArtworkView)
+        domain_data["artwork_view_registered"] = True
     async_setup_services(hass)
     return True
 
@@ -57,6 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     hass.data[DOMAIN].setdefault("entries", {})[entry.entry_id] = {
         "coordinator": coordinator,
         "inventory": inventory,
+        "artwork_proxy_secret": secrets.token_bytes(32),
     }
 
     async def _async_reconcile_updated_collection() -> None:
