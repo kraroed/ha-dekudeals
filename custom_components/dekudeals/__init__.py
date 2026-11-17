@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 
@@ -57,25 +58,33 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     await inventory.async_reconcile_collection(coordinator.data or [])
 
     hass.data.setdefault(DOMAIN, {"entries": {}})
-    hass.data[DOMAIN].setdefault("entries", {})[entry.entry_id] = {
+    entry_data = {
         "coordinator": coordinator,
         "inventory": inventory,
+        "reconciliation_tasks": set(),
+        "reconciliation_task": None,
         # The unauthenticated image endpoint requires this unguessable,
         # runtime-only secret for every individual config entry.
         "artwork_proxy_secret": secrets.token_urlsafe(32),
     }
+    hass.data[DOMAIN].setdefault("entries", {})[entry.entry_id] = entry_data
 
     async def _async_reconcile_updated_collection() -> None:
         """Keep physical inventory in sync after a successful live refresh."""
-        try:
-            await inventory.async_reconcile_collection(coordinator.data or [])
-        except Exception:
-            _LOGGER.exception("Failed to reconcile refreshed DekuDeals collection")
-            return
+        await inventory.async_reconcile_collection(coordinator.data or [])
         async_dispatcher_send(hass, f"{DOMAIN}_{entry.entry_id}_inventory_updated")
 
+    def _reconciliation_finished(task: asyncio.Task) -> None:
+        entry_data["reconciliation_tasks"].discard(task)
+        if not task.cancelled():
+            # Retrieve background exceptions to avoid an unhandled-task warning.
+            task.exception()
+
     def _handle_coordinator_update() -> None:
-        hass.async_create_task(_async_reconcile_updated_collection())
+        task = hass.async_create_task(_async_reconcile_updated_collection())
+        entry_data["reconciliation_task"] = task
+        entry_data["reconciliation_tasks"].add(task)
+        task.add_done_callback(_reconciliation_finished)
 
     entry.async_on_unload(coordinator.async_add_listener(_handle_coordinator_update))
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
@@ -92,5 +101,10 @@ async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
     """Unload a collection without deleting its persistent inventory."""
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
+    entry_data = hass.data[DOMAIN]["entries"].get(entry.entry_id)
+    if entry_data is not None:
+        tasks = tuple(entry_data.get("reconciliation_tasks", ()))
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
     hass.data[DOMAIN]["entries"].pop(entry.entry_id, None)
     return True
