@@ -68,6 +68,18 @@ def build_artwork_proxy_url(entry_id: str, secret: str, image_url: str) -> str:
     )
 
 
+async def _async_read_bounded_image(content) -> bytes:
+    """Read an entire streamed image while enforcing the response-size limit."""
+    chunks = bytearray()
+    async for chunk in content.iter_chunked(64 * 1024):
+        chunks.extend(chunk)
+        if len(chunks) > _MAX_IMAGE_BYTES:
+            raise web.HTTPBadGateway()
+    if not chunks:
+        raise web.HTTPBadGateway()
+    return bytes(chunks)
+
+
 class TheGamesDBArtworkView(HomeAssistantView):
     """Serve signed TheGamesDB front covers from the Home Assistant origin."""
 
@@ -103,12 +115,17 @@ class TheGamesDBArtworkView(HomeAssistantView):
         current_url = image_url
         try:
             # Follow a small number of CDN redirects manually. Every destination
-            # must remain an approved TheGamesDB front-cover URL.
+            # must remain an approved TheGamesDB front-cover URL. Ask upstream
+            # intermediaries not to substitute a reduced or transformed image.
             for redirect_count in range(4):
                 async with session.get(
                     current_url,
                     timeout=aiohttp.ClientTimeout(total=20),
                     allow_redirects=False,
+                    headers={
+                        "Accept": "image/jpeg,image/png,image/webp,*/*;q=0.8",
+                        "Cache-Control": "no-transform",
+                    },
                 ) as response:
                     if response.status in {301, 302, 303, 307, 308}:
                         target = _safe_redirect_target(
@@ -125,16 +142,16 @@ class TheGamesDBArtworkView(HomeAssistantView):
                         raise web.HTTPBadGateway()
                     if response.content_length is not None and response.content_length > _MAX_IMAGE_BYTES:
                         raise web.HTTPBadGateway()
-                    body = await response.content.read(_MAX_IMAGE_BYTES + 1)
-                    if not body or len(body) > _MAX_IMAGE_BYTES:
-                        raise web.HTTPBadGateway()
+                    body = await _async_read_bounded_image(response.content)
                     break
         except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.debug("TheGamesDB artwork proxy request failed: %s", err)
             raise web.HTTPBadGateway() from err
 
+        # no-transform also asks reverse proxies and caches between Home
+        # Assistant and the browser to preserve the original image bytes.
         return web.Response(
             body=body,
             content_type=content_type,
-            headers={"Cache-Control": "public, max-age=86400"},
+            headers={"Cache-Control": "public, max-age=86400, no-transform"},
         )
