@@ -1,6 +1,9 @@
 """Tests for safe physical inventory reconciliation."""
 
-from custom_components.dekudeals.reconciliation import (\n    _fingerprint_for,\n    build_reconciliation_plan,\n)
+from custom_components.dekudeals.reconciliation import (
+    _fingerprint_for,
+    build_reconciliation_plan,
+)
 
 
 def _item(name="Game", added_at="2026-01-01"):
