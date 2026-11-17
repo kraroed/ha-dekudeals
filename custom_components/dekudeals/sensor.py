@@ -9,6 +9,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .artwork_proxy import build_artwork_proxy_url
 from .const import DOMAIN, MAX_LIST_ITEMS
 
 COLLECTION_DESCRIPTIONS = (
@@ -38,11 +39,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entry_data = hass.data[DOMAIN]["entries"][entry.entry_id]
     coordinator = entry_data["coordinator"]
     inventory = entry_data["inventory"]
+    artwork_proxy_secret = entry_data["artwork_proxy_secret"]
     entities = [
         DekuDealsSensor(
             coordinator,
             entry.entry_id,
             description,
+            artwork_proxy_secret,
         )
         for description in COLLECTION_DESCRIPTIONS
     ]
@@ -51,6 +54,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             inventory,
             entry.entry_id,
             description,
+            artwork_proxy_secret,
         )
         for description in INVENTORY_DESCRIPTIONS
     )
@@ -63,10 +67,11 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _unrecorded_attributes = frozenset({"items"})
 
-    def __init__(self, coordinator, entry_id, description):
+    def __init__(self, coordinator, entry_id, description, artwork_proxy_secret):
         super().__init__(coordinator)
         self.entity_description = description
         self._entry_id = entry_id
+        self._artwork_proxy_secret = artwork_proxy_secret
         self._attr_unique_id = f"{entry_id}_{description.key}"
 
     @property
@@ -103,9 +108,17 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        """Expose a bounded snapshot with direct provider artwork URLs."""
+        """Expose a bounded snapshot with same-origin URLs for TheGamesDB art."""
         items = self.coordinator.data or []
-        exposed_items = [dict(item) for item in items[:MAX_LIST_ITEMS]]
+        exposed_items = []
+        for source_item in items[:MAX_LIST_ITEMS]:
+            item = dict(source_item)
+            image_url = item.get("image")
+            if isinstance(image_url, str):
+                item["image"] = build_artwork_proxy_url(
+                    self._entry_id, self._artwork_proxy_secret, image_url
+                )
+            exposed_items.append(item)
         return {
             "items": exposed_items,
             "items_truncated": len(items) > MAX_LIST_ITEMS,
@@ -120,8 +133,9 @@ class InventorySensor(SensorEntity):
     _attr_has_entity_name = True
     _unrecorded_attributes = frozenset({"copies", "recent_events"})
 
-    def __init__(self, inventory, entry_id, description):
+    def __init__(self, inventory, entry_id, description, artwork_proxy_secret):
         self.inventory = inventory
+        self._artwork_proxy_secret = artwork_proxy_secret
         self.entity_description = description
         self._entry_id = entry_id
         self._attr_unique_id = f"{entry_id}_{description.key}"
@@ -216,7 +230,15 @@ class InventorySensor(SensorEntity):
             }
         else:
             selected = copies
-        exposed_copies = [dict(copy) for copy in selected[:MAX_LIST_ITEMS]]
+        exposed_copies = []
+        for source_copy in selected[:MAX_LIST_ITEMS]:
+            copy = dict(source_copy)
+            image_url = copy.get("image")
+            if isinstance(image_url, str):
+                copy["image"] = build_artwork_proxy_url(
+                    self._entry_id, self._artwork_proxy_secret, image_url
+                )
+            exposed_copies.append(copy)
         return {
             "copies": exposed_copies,
             "items_truncated": len(selected) > MAX_LIST_ITEMS,
