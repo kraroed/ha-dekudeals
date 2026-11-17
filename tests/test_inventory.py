@@ -234,3 +234,40 @@ def test_separate_config_entries_keep_inventory_and_loans_isolated():
     assert reloaded_playstation.snapshot()["copies"][playstation_copy]["active_loan"] is None
     assert reloaded_switch.snapshot()["history"][0]["borrower"] == "Alex"
     assert reloaded_playstation.snapshot()["history"] == []
+
+
+def test_concurrent_collection_refresh_preserves_loan_and_history():
+    inventory = _new_inventory()
+    imported = {
+        "name": "Concurrent Game",
+        "format": "physical",
+        "platform": "Switch",
+        "link": "https://www.dekudeals.com/items/concurrent-game",
+        "added_at": "2026-01-01",
+    }
+
+    async def refresh_and_lend():
+        await inventory.async_reconcile_collection([imported])
+        copy_id = next(iter(inventory.snapshot()["copies"]))
+        await asyncio.gather(
+            inventory.async_lend_copy(copy_id, "Alex", "2026-12-01", "Keep safe"),
+            inventory.async_reconcile_collection([imported]),
+            inventory.async_reconcile_collection([]),
+        )
+        snapshot = inventory.snapshot()
+        assert snapshot["copies"][copy_id]["active_loan"]["borrower"] == "Alex"
+        assert snapshot["copies"][copy_id]["collection_present"] is False
+        assert [event["event"] for event in snapshot["history"]] == ["lent"]
+
+        # A later reappearance and disappearance must not rewrite loan history.
+        await inventory.async_reconcile_collection([imported])
+        await inventory.async_reconcile_collection([])
+        assert inventory.snapshot()["history"] == snapshot["history"]
+        await inventory.async_return_copy(copy_id)
+        final = inventory.snapshot()
+        assert final["copies"][copy_id]["active_loan"] is None
+        assert [event["event"] for event in final["history"]] == ["lent", "returned"]
+        assert final["history"][0]["borrower"] == "Alex"
+        assert final["history"][1]["borrower"] == "Alex"
+
+    asyncio.run(asyncio.wait_for(refresh_and_lend(), timeout=5))

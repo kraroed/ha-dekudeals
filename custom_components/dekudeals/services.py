@@ -15,6 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .artwork_proxy import _safe_redirect_target, is_allowed_artwork_url
 from .const import DOMAIN
 from .inventory import GameInventory, InventoryError
+from .refresh import ReconciliationFailed, async_refresh_and_reconcile
 
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_COPY_ID = "copy_id"
@@ -94,13 +95,29 @@ def async_setup_services(hass: HomeAssistant) -> None:
             ),
         )
 
+    async def _refresh_and_reconcile(entry_data, refresh_method) -> None:
+        """Wait for collection refresh and durable inventory reconciliation."""
+        try:
+            await async_refresh_and_reconcile(entry_data, refresh_method)
+        except ReconciliationFailed as err:
+            raise HomeAssistantError(
+                "The collection refreshed, but inventory reconciliation failed. "
+                "Check the DekuDeals integration log before retrying."
+            ) from err
+
     async def refresh(call: ServiceCall) -> None:
         entry_id, _inventory = _get_inventory(hass, call)
-        await hass.data[DOMAIN]["entries"][entry_id]["coordinator"].async_request_refresh()
+        entry_data = hass.data[DOMAIN]["entries"][entry_id]
+        await _refresh_and_reconcile(
+            entry_data, entry_data["coordinator"].async_request_refresh
+        )
 
     async def refresh_artwork(call: ServiceCall) -> None:
         entry_id, _inventory = _get_inventory(hass, call)
-        await hass.data[DOMAIN]["entries"][entry_id]["coordinator"].async_refresh_artwork()
+        entry_data = hass.data[DOMAIN]["entries"][entry_id]
+        await _refresh_and_reconcile(
+            entry_data, entry_data["coordinator"].async_refresh_artwork
+        )
 
     async def diagnose_artwork(call: ServiceCall) -> None:
         """Check a selected game's TheGamesDB URL from the HA host."""

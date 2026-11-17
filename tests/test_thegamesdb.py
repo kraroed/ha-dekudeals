@@ -117,3 +117,42 @@ def test_provider_does_not_fetch_without_api_key():
         assert session.calls == []
 
     asyncio.run(run())
+
+
+def test_platform_catalog_failure_is_cached_briefly_then_retried(monkeypatch):
+    from types import SimpleNamespace
+
+    from custom_components.dekudeals import thegamesdb as module
+
+    class FailingOnceSession(FakeSession):
+        def __init__(self):
+            super().__init__([_platforms_payload(), _games_payload()])
+            self.attempts = 0
+
+        def get(self, url, *, params, timeout):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise asyncio.TimeoutError
+            return super().get(url, params=params, timeout=timeout)
+
+    async def run():
+        clock = [1000.0]
+        monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+        session = FailingOnceSession()
+        provider = TheGamesDBArtworkProvider(session, "test-key")
+
+        assert await provider.async_get_front_cover("Example Game", "Switch") is None
+        assert session.attempts == 1
+
+        # A second title lookup in the same refresh reuses the cached failure.
+        assert await provider.async_get_front_cover("Another Game", "Switch") is None
+        assert session.attempts == 1
+
+        # The negative cache expires and the provider can recover.
+        clock[0] += 61
+        assert await provider.async_get_front_cover("Example Game", "Switch") == (
+            "https://cdn.thegamesdb.net/images/original/boxart/front/42-1.jpg"
+        )
+        assert session.attempts == 3
+
+    asyncio.run(run())

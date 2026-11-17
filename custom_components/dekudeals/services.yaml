@@ -112,3 +112,26 @@ refresh_collection:
       name: Collection entry ID
       selector:
         text:
+
+refresh_artwork:
+  name: Refresh artwork
+  description: Retry TheGamesDB artwork lookups for cached collection items without changing inventory, loans, or lending history.
+  fields:
+    config_entry_id:
+      name: Collection entry ID
+      selector:
+        text:
+
+diagnose_artwork:
+  name: Diagnose artwork
+  description: Test the selected game's TheGamesDB CDN image from the Home Assistant host and create a diagnostic notification.
+  fields:
+    game_name:
+      name: Game name
+      description: Game title to locate in the selected collection. Defaults to Bluey.
+      selector:
+        text:
+    config_entry_id:
+      name: Collection entry ID
+      selector:
+        text:
