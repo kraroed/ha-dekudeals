@@ -2,7 +2,9 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.3**
+**Release: 0.4.7**
+
+Version 0.4.7 improves TheGamesDB front-cover selection and adds the `dekudeals.refresh_artwork` service to retry cached artwork lookups on demand. The artwork refresh preserves collection data, physical inventory, descriptions, and previously verified covers. Metadata enrichment now processes up to 50 items per refresh. TheGamesDB HTTP errors are logged with their status code without exposing API credentials.
 
 Version 0.4.3 excludes large collection and inventory list attributes from Recorder history. These attributes remain available in live entity state for the Lovelace card, while count values and small status attributes continue to be recorded.
 
@@ -19,7 +21,7 @@ The integration reads the public JSON export available by appending `.json` to a
 - Enrich collection rows with verified portrait artwork, the actual item-page Description text, and DLC classification from public DekuDeals item titles and descriptions.
 - Optional TheGamesDB artwork lookup: when an API key is configured, the integration requests the exact game title and console and accepts only images explicitly marked `boxart` / `front` with portrait dimensions. No approximate title or cross-console matches are accepted.
 - Retry one provider lookup for previously cached missing covers after an API key is added; unsuccessful lookups retain the normal seven-day retry interval.
-- Cache game metadata locally using a fresh versioned cache key so upgrades do not require an unsupported Home Assistant storage migration; fetch at most 20 missing item pages per collection refresh with limited concurrency to avoid excessive requests.
+- Cache game metadata locally using a fresh versioned cache key so upgrades do not require an unsupported Home Assistant storage migration; fetch at most 50 missing item pages per collection refresh with limited concurrency to avoid excessive requests.
 - Collection count sensors for full games, DLC items, Switch, Switch 2, physical games, and digital games. DLC does not inflate full-game counts.
 - Persistent local physical-copy inventory, separate from the online collection.
 - Unique IDs for duplicate physical copies.
@@ -63,7 +65,7 @@ To replace or clear the fallback later, open the integration's **Configure** opt
 
 ## Supported export format
 
-The export can be either a JSON object containing an `items` array or a top-level JSON array. Each row should contain an item `name`; optional fields include `link`, `added_at`, `format`, `platform`, and `note`. The integration reads cover art from image metadata and extracts descriptions only from the visible Description section of eligible public DekuDeals item pages; it deliberately ignores social/meta descriptions that may contain sale copy. Items are classified as DLC using DekuDeals' “DLC for [game]” label, item title, and actual Description text (including DLC, downloadable content, season pass, expansion pack, and add-on markers). DLC is excluded from full-game, platform, and physical/digital game counts. Metadata lookups are limited to HTTPS `dekudeals.com/items/...` URLs and capped at 20 item pages per six-hour refresh. Successful artwork metadata is cached locally for 30 days; entries without verified artwork are retried after 7 days, except that adding a previously absent TheGamesDB API key triggers one immediate provider check on the next refresh. A missing or unavailable detail page does not prevent the collection itself from refreshing.
+The export can be either a JSON object containing an `items` array or a top-level JSON array. Each row should contain an item `name`; optional fields include `link`, `added_at`, `format`, `platform`, and `note`. The integration reads cover art from image metadata and extracts descriptions only from the visible Description section of eligible public DekuDeals item pages; it deliberately ignores social/meta descriptions that may contain sale copy. Items are classified as DLC using DekuDeals' “DLC for [game]” label, item title, and actual Description text (including DLC, downloadable content, season pass, expansion pack, and add-on markers). DLC is excluded from full-game, platform, and physical/digital game counts. Metadata lookups are limited to HTTPS `dekudeals.com/items/...` URLs and capped at 50 item pages per six-hour refresh. Successful artwork metadata is cached locally for 30 days; entries without verified artwork are retried after 7 days, except that adding a previously absent TheGamesDB API key triggers one immediate provider check on the next refresh. A missing or unavailable detail page does not prevent the collection itself from refreshing.
 
 Example:
 
@@ -115,6 +117,7 @@ Sensor attributes expose bounded lists (up to 500 records) and include a truncat
 All services accept an optional `config_entry_id` when multiple collections are configured.
 
 - `dekudeals.refresh_collection` — fetch the latest public export and reconcile inventory.
+- `dekudeals.refresh_artwork` — retry cached artwork lookups without clearing collection data or physical inventory.
 - `dekudeals.register_copy` — register a physical copy not represented by the export (`game`, optional `platform`, `notes`).
 - `dekudeals.lend_game` — lend a copy (`copy_id`, `borrower`, optional `due_date` in YYYY-MM-DD format and `notes`).
 - `dekudeals.return_game` — return a loan (`copy_id`).
