@@ -4,7 +4,10 @@ import asyncio
 
 import pytest
 
-from custom_components.dekudeals.refresh import async_refresh_and_reconcile
+from custom_components.dekudeals.refresh import (
+    ReconciliationFailed,
+    async_refresh_and_reconcile,
+)
 
 
 def test_refresh_service_waits_for_inventory_reconciliation():
@@ -46,7 +49,7 @@ def test_refresh_service_propagates_reconciliation_failure():
 
             entry_data["reconciliation_task"] = asyncio.create_task(reconcile())
 
-        with pytest.raises(OSError, match="storage write failed"):
+        with pytest.raises(ReconciliationFailed, match="inventory reconciliation failed"):
             await async_refresh_and_reconcile(entry_data, refresh)
 
     asyncio.run(run())
@@ -74,5 +77,17 @@ def test_overlapping_manual_refreshes_are_serialized():
         )
         assert maximum_active == 1
         assert order == ["start", "end", "start", "end"]
+
+    asyncio.run(run())
+
+
+
+def test_collection_refresh_failure_is_not_misreported_as_reconciliation_failure():
+    async def run():
+        async def refresh():
+            raise ConnectionError("DekuDeals is unreachable")
+
+        with pytest.raises(ConnectionError, match="DekuDeals is unreachable"):
+            await async_refresh_and_reconcile({}, refresh)
 
     asyncio.run(run())
