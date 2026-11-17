@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import aiohttp
 import voluptuous as vol
+from urllib.parse import urlparse
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -176,7 +177,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         except (aiohttp.ClientError, TimeoutError) as err:
             result = f"FAILED: network request raised {type(err).__name__}: {err}"
         details.append(f"Redirects followed: {redirects}")
-        details.append(f"Final URL host: {aiohttp.client_reqrep.URL(current_url).host}")
+        details.append(f"Final URL host: {urlparse(current_url).hostname}")
         message = (
             f"Artwork diagnostic for **{match.get('name', game_name)}**\n\n"
             f"**{result}**\n\n" + "\n\n".join(details)
