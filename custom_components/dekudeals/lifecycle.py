@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+
 class ReconciliationTaskTracker:
     """Track reconciliation work so refreshes and unloads can await it."""
 
@@ -26,4 +27,9 @@ class ReconciliationTaskTracker:
     async def async_wait(self) -> None:
         """Wait until every currently running reconciliation has settled."""
         while self.tasks:
-            await asyncio.gather(*tuple(self.tasks), return_exceptions=True)
+            pending = tuple(self.tasks)
+            await asyncio.gather(*pending, return_exceptions=True)
+            # A task's gather callback can wake this coroutine before the
+            # tracker's done callback runs. Remove the completed snapshot here
+            # as well, otherwise the loop can repeatedly gather the same task.
+            self.tasks.difference_update(task for task in pending if task.done())
