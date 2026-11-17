@@ -198,3 +198,59 @@ def test_reconciliation_updates_existing_copy_metadata_without_losing_notes():
     assert plan["updates"]["copy-metadata"]["image"] == imported["image"]
     assert plan["updates"]["copy-metadata"]["description"] == imported["description"]
     assert existing["notes"] == "keep my notes"
+
+
+def test_distinct_duplicate_fingerprints_match_their_original_copies():
+    incoming = [_item(added_at="2026-01-01"), _item(added_at="2026-02-01")]
+    initial = build_reconciliation_plan(incoming, {})
+    identity = initial["creates"][0]["identity"]
+    by_date = {row["added_at"]: row["fingerprint"] for row in initial["creates"]}
+    copies = {
+        # IDs intentionally sort opposite to the source fingerprints.
+        "copy-a": {
+            **_copy("copy-a", identity),
+            "source_fingerprint": by_date["2026-02-01"],
+            "active_loan": {"borrower": "Alex"},
+        },
+        "copy-z": {
+            **_copy("copy-z", identity),
+            "source_fingerprint": by_date["2026-01-01"],
+            "active_loan": {"borrower": "Jordan"},
+        },
+    }
+
+    plan = build_reconciliation_plan(incoming, copies)
+
+    assert plan["creates"] == []
+    assert plan["ambiguous"] == set()
+    assert plan["updates"]["copy-a"]["source_fingerprint"] == by_date["2026-02-01"]
+    assert plan["updates"]["copy-z"]["source_fingerprint"] == by_date["2026-01-01"]
+
+
+def test_multiple_changed_duplicate_fingerprints_are_flagged_not_paired():
+    old_rows = [_item(added_at="2025-01-01"), _item(added_at="2025-02-01")]
+    new_rows = [_item(added_at="2026-01-01"), _item(added_at="2026-02-01")]
+    identity = build_reconciliation_plan(old_rows, {})["creates"][0]["identity"]
+    old_fingerprints = {
+        row["added_at"]: row["fingerprint"]
+        for row in build_reconciliation_plan(old_rows, {})["creates"]
+    }
+    copies = {
+        "copy-a": {
+            **_copy("copy-a", identity),
+            "source_fingerprint": old_fingerprints["2025-01-01"],
+        },
+        "copy-b": {
+            **_copy("copy-b", identity),
+            "source_fingerprint": old_fingerprints["2025-02-01"],
+        },
+    }
+
+    plan = build_reconciliation_plan(new_rows, copies)
+
+    assert plan["creates"] == []
+    assert plan["ambiguous"] == {"copy-a", "copy-b"}
+    assert all(
+        plan["updates"][copy_id]["review_reason"] == "duplicate_count_changed"
+        for copy_id in copies
+    )
