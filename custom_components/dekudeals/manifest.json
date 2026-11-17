@@ -8,9 +8,12 @@
     "@kraroed"
   ],
   "config_flow": true,
+  "dependencies": [
+    "http"
+  ],
   "documentation": "https://github.com/kraroed/ha-dekudeals",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/kraroed/ha-dekudeals/issues",
   "requirements": [],
-  "version": "0.4.7"
+  "version": "0.4.8"
 }

@@ -2,7 +2,9 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.7**
+**Release: 0.4.8**
+
+Version 0.4.8 serves verified TheGamesDB front-cover artwork through a signed, same-origin Home Assistant endpoint. The proxy accepts only HTTPS images from the approved TheGamesDB front-boxart path, verifies a per-config-entry HMAC signature, rejects redirects and non-image responses, and limits downloaded image size. This avoids direct CDN image requests from the Home Assistant iOS/WebView card while keeping the original metadata cache and collection data intact.
 
 Version 0.4.7 improves TheGamesDB front-cover selection and adds the `dekudeals.refresh_artwork` service to retry cached artwork lookups on demand. The artwork refresh preserves collection data, physical inventory, descriptions, and previously verified covers. Metadata enrichment now processes up to 50 items per refresh. TheGamesDB HTTP errors are logged with their status code without exposing API credentials.
 
@@ -20,6 +22,7 @@ The integration reads the public JSON export available by appending `.json` to a
 - Normalize missing platform values to `Unknown`.
 - Enrich collection rows with verified portrait artwork, the actual item-page Description text, and DLC classification from public DekuDeals item titles and descriptions.
 - Optional TheGamesDB artwork lookup: when an API key is configured, the integration requests the exact game title and console and accepts only images explicitly marked `boxart` / `front` with portrait dimensions. No approximate title or cross-console matches are accepted.
+- Serve verified TheGamesDB front covers through a signed Home Assistant same-origin endpoint, with strict source validation and bounded image downloads.
 - Retry one provider lookup for previously cached missing covers after an API key is added; unsuccessful lookups retain the normal seven-day retry interval.
 - Cache game metadata locally using a fresh versioned cache key so upgrades do not require an unsupported Home Assistant storage migration; fetch at most 50 missing item pages per collection refresh with limited concurrency to avoid excessive requests.
 - Collection count sensors for full games, DLC items, Switch, Switch 2, physical games, and digital games. DLC does not inflate full-game counts.
@@ -67,50 +70,13 @@ To replace or clear the fallback later, open the integration's **Configure** opt
 
 The export can be either a JSON object containing an `items` array or a top-level JSON array. Each row should contain an item `name`; optional fields include `link`, `added_at`, `format`, `platform`, and `note`. The integration reads cover art from image metadata and extracts descriptions only from the visible Description section of eligible public DekuDeals item pages; it deliberately ignores social/meta descriptions that may contain sale copy. Items are classified as DLC using DekuDeals' “DLC for [game]” label, item title, and actual Description text (including DLC, downloadable content, season pass, expansion pack, and add-on markers). DLC is excluded from full-game, platform, and physical/digital game counts. Metadata lookups are limited to HTTPS `dekudeals.com/items/...` URLs and capped at 50 item pages per six-hour refresh. Successful artwork metadata is cached locally for 30 days; entries without verified artwork are retried after 7 days, except that adding a previously absent TheGamesDB API key triggers one immediate provider check on the next refresh. A missing or unavailable detail page does not prevent the collection itself from refreshing.
 
-Example:
-
-```json
-{
-  "items": [
-    {
-      "name": "Example Game",
-      "link": "https://www.dekudeals.com/items/example-game",
-      "added_at": "2026-01-01",
-      "format": "physical",
-      "platform": "Switch"
-    }
-  ]
-}
-```
-
-Rows are not deduplicated. Each physical row represents a separate collection copy.
-
 ## Sensors
 
-### Collection
+Collection sensors expose a bounded `items` list. Verified TheGamesDB front-cover URLs in this live list are rewritten to signed relative URLs served by Home Assistant; cached source URLs are not modified. Other image URLs are left unchanged.
 
-- **Games** — imported full-game rows, excluding DLC.
-- **DLC Items** — imported DLC rows.
-- **Switch Games** — rows whose platform is Switch.
-- **Switch 2 Games** — rows whose platform is Switch 2.
-- **Configured Platform Games** — full-game rows for the platform selected in this integration entry; use this sensor for PlayStation, Xbox, retro consoles, or `All Platforms`.
-- **Physical Games** — rows marked physical.
-- **Digital Games** — rows marked digital.
+Collection count sensors include **Games**, **DLC Items**, **Switch Games**, **Switch 2 Games**, **Configured Platform Games**, **Physical Games**, and **Digital Games**. Physical inventory sensors include **Games In Possession**, **Games Lent Out**, **Games Overdue**, **Total Physical Copies**, **Active Game Loans**, **Game Lending History**, **Inventory Needs Review**, and **Unmatched Physical Games**.
 
-### Physical inventory and lending
-
-- **Games In Possession**
-- **Games Lent Out**
-- **Games Overdue**
-- **Total Physical Copies**
-- **Active Game Loans**
-- **Game Lending History**
-- **Inventory Needs Review**
-- **Unmatched Physical Games**
-
-Entity IDs are generated by Home Assistant from the configured device and entity names. Use the IDs shown in your instance.
-
-Sensor attributes expose bounded lists (up to 500 records) and include a truncation flag. Collection `items` attributes include `image`, `description`, `item_type` (`game` or `dlc`), and `parent_game` when available. Large list attributes (`items`, `copies`, and `recent_events`) are excluded from Recorder history to avoid its 16 KiB attribute limit; they remain available in live entity state for the Lovelace card. Count values and small status attributes continue to be recorded. The lending-history sensor exposes the 20 most recent events; the complete history remains stored locally.
+Large list attributes are excluded from Recorder history to avoid its 16 KiB attribute limit; they remain available in live entity state for the Lovelace card. Count values and small status attributes continue to be recorded.
 
 ## Services
 
@@ -118,24 +84,21 @@ All services accept an optional `config_entry_id` when multiple collections are 
 
 - `dekudeals.refresh_collection` — fetch the latest public export and reconcile inventory.
 - `dekudeals.refresh_artwork` — retry cached artwork lookups without clearing collection data or physical inventory.
-- `dekudeals.register_copy` — register a physical copy not represented by the export (`game`, optional `platform`, `notes`).
-- `dekudeals.lend_game` — lend a copy (`copy_id`, `borrower`, optional `due_date` in YYYY-MM-DD format and `notes`).
-- `dekudeals.return_game` — return a loan (`copy_id`).
-- `dekudeals.update_inventory` — update copy notes (`copy_id`, `notes`).
-- `dekudeals.resolve_inventory_match` — resolve a review item (`copy_id`, `resolution`: `present`, `not_present`, or `manual`).
-
-Only physical copies can be lent. Digital collection entries are not added to physical inventory.
+- `dekudeals.register_copy` — register a physical copy not represented by the export.
+- `dekudeals.lend_game` — lend a copy.
+- `dekudeals.return_game` — return a loan.
+- `dekudeals.update_inventory` — update copy notes.
+- `dekudeals.resolve_inventory_match` — resolve an inventory review item.
 
 ## Data and privacy
 
-The integration requests the public collection export and eligible public item pages over HTTPS. It does not ask for or store your DekuDeals password. Game metadata is cached in Home Assistant local integration storage. Physical-copy details, borrower names, notes, and lending history are stored locally in Home Assistant's integration storage and are not sent to DekuDeals.
+The integration requests the public collection export and eligible public item pages over HTTPS. It does not ask for or store your DekuDeals password. Game metadata is cached locally in Home Assistant. Physical-copy details, borrower names, notes, and lending history are stored locally and are not sent to DekuDeals. The artwork proxy is an unauthenticated image endpoint because browsers cannot attach Home Assistant bearer tokens to ordinary image tags; every image request therefore requires a high-entropy per-entry signature and is restricted to a single approved CDN host and front-boxart path.
 
 ## Troubleshooting
 
 - If setup cannot reach the export, confirm the collection is public and the URL is correct.
-- You can paste a saved JSON export as a fallback during setup, or add one later through **Configure**.
 - Use `dekudeals.refresh_collection` to request an immediate live refresh.
-- Check the Home Assistant logs for messages from the `dekudeals` integration.
+- Check Home Assistant logs for messages from the `dekudeals` integration.
 
 ## Development
 
