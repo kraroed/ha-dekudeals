@@ -130,9 +130,14 @@ class TheGamesDBArtworkView(HomeAssistantView):
                         raise web.HTTPBadGateway()
                     if response.content_length is not None and response.content_length > _MAX_IMAGE_BYTES:
                         raise web.HTTPBadGateway()
-                    body = await response.content.read(_MAX_IMAGE_BYTES + 1)
-                    if not body or len(body) > _MAX_IMAGE_BYTES:
+                    chunks = bytearray()
+                    async for chunk in response.content.iter_chunked(64 * 1024):
+                        chunks.extend(chunk)
+                        if len(chunks) > _MAX_IMAGE_BYTES:
+                            raise web.HTTPBadGateway()
+                    if not chunks:
                         raise web.HTTPBadGateway()
+                    body = bytes(chunks)
                     break
         except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.debug("TheGamesDB artwork proxy request failed: %s", err)
