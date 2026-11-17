@@ -27,6 +27,16 @@ dt = ModuleType("homeassistant.util.dt")
 dt.utcnow = lambda: datetime.now(timezone.utc)
 sys.modules.setdefault("homeassistant", homeassistant)
 sys.modules.setdefault("homeassistant.core", core)
+
+components = ModuleType("homeassistant.components")
+components.__path__ = []
+http = ModuleType("homeassistant.components.http")
+http.HomeAssistantView = type("HomeAssistantView", (), {})
+components_http_helpers = ModuleType("homeassistant.helpers.aiohttp_client")
+components_http_helpers.async_get_clientsession = lambda hass: None
+sys.modules.setdefault("homeassistant.components", components)
+sys.modules.setdefault("homeassistant.components.http", http)
+sys.modules.setdefault("homeassistant.helpers.aiohttp_client", components_http_helpers)
 sys.modules.setdefault("homeassistant.helpers", helpers)
 sys.modules.setdefault("homeassistant.helpers.storage", storage)
 sys.modules.setdefault("homeassistant.util", util)
