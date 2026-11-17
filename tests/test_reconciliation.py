@@ -1,6 +1,6 @@
 """Tests for safe physical inventory reconciliation."""
 
-from custom_components.dekudeals.reconciliation import build_reconciliation_plan
+from custom_components.dekudeals.reconciliation import (\n    _fingerprint_for,\n    build_reconciliation_plan,\n)
 
 
 def _item(name="Game", added_at="2026-01-01"):
@@ -21,7 +21,7 @@ def _copy(copy_id, identity, loan=None):
         "format": "physical",
         "source": "dekudeals",
         "source_identity": identity,
-        "source_fingerprint": "old",
+        "source_fingerprint": _fingerprint_for(_item(), identity),
         "collection_present": True,
         "match_confirmed": False,
         "needs_review": False,
