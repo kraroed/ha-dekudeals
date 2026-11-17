@@ -9,6 +9,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .artwork_proxy import artwork_proxy_url
 from .const import DOMAIN, MAX_LIST_ITEMS
 
 COLLECTION_DESCRIPTIONS = (
@@ -53,8 +54,6 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
     """Represent a collection count."""
 
     _attr_has_entity_name = True
-    # Collection data is consumed live by the Lovelace card, not useful in history.
-    # Excluding it prevents large collections from exceeding Recorder's 16 KiB limit.
     _unrecorded_attributes = frozenset({"items"})
 
     def __init__(self, coordinator, entry_id, description):
@@ -79,9 +78,7 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
         items = self.coordinator.data or []
         key = self.entity_description.key
         games = [item for item in items if item.get("item_type") != "dlc"]
-        if key == "games":
-            return len(games)
-        if key == "configured_platform_games":
+        if key in {"games", "configured_platform_games"}:
             return len(games)
         if key == "dlc_items":
             return sum(item.get("item_type") == "dlc" for item in items)
@@ -97,11 +94,20 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        """Expose a bounded snapshot of the imported collection."""
-        items = self.coordinator.data or []
+        """Expose a bounded snapshot with local URLs for approved remote covers."""
+        items = []
+        for source in (self.coordinator.data or [])[:MAX_LIST_ITEMS]:
+            item = dict(source)
+            image_url = item.get("image")
+            if isinstance(image_url, str):
+                item["image"] = artwork_proxy_url(
+                    self.hass, self._entry_id, image_url
+                )
+            items.append(item)
+        source_items = self.coordinator.data or []
         return {
-            "items": items[:MAX_LIST_ITEMS],
-            "items_truncated": len(items) > MAX_LIST_ITEMS,
+            "items": items,
+            "items_truncated": len(source_items) > MAX_LIST_ITEMS,
             "source": "DekuDeals JSON export",
             "configured_platform": self.coordinator.platform,
         }
@@ -111,8 +117,6 @@ class InventorySensor(SensorEntity):
     """Expose a live view of persistent physical game inventory."""
 
     _attr_has_entity_name = True
-    # Detailed inventory and event lists remain available to the card at runtime,
-    # but should not be duplicated into Recorder history.
     _unrecorded_attributes = frozenset({"copies", "recent_events"})
 
     def __init__(self, inventory, entry_id, description):
