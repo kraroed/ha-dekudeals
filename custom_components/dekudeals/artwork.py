@@ -57,18 +57,21 @@ def select_thegamesdb_front_cover(
                 continue
             if image.get("type") != "boxart" or image.get("side") != "front":
                 continue
+            # Resolution is optional in TheGamesDB image records. If present,
+            # enforce portrait dimensions; if absent, trust explicit boxart/front labels.
             resolution = image.get("resolution")
-            if not isinstance(resolution, str):
-                continue
-            match = re.fullmatch(r"(\d+)x(\d+)", resolution.strip())
-            if not match:
-                continue
-            width, height = (int(part) for part in match.groups())
-            if width <= 0 or height <= 0:
-                continue
-            ratio = width / height
-            if not 0.48 <= ratio <= 0.85:
-                continue
+            if resolution is not None:
+                if not isinstance(resolution, str):
+                    continue
+                match = re.fullmatch(r"(\\d+)x(\\d+)", resolution.strip())
+                if not match:
+                    continue
+                width, height = (int(part) for part in match.groups())
+                if width <= 0 or height <= 0:
+                    continue
+                ratio = width / height
+                if not 0.48 <= ratio <= 0.85:
+                    continue
             filename = image.get("filename")
             if (
                 not isinstance(filename, str)
