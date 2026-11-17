@@ -68,6 +68,18 @@ def build_artwork_proxy_url(entry_id: str, secret: str, image_url: str) -> str:
     )
 
 
+async def _async_read_bounded_image(content) -> bytes:
+    """Read an entire streamed image while enforcing the response-size limit."""
+    chunks = bytearray()
+    async for chunk in content.iter_chunked(64 * 1024):
+        chunks.extend(chunk)
+        if len(chunks) > _MAX_IMAGE_BYTES:
+            raise web.HTTPBadGateway()
+    if not chunks:
+        raise web.HTTPBadGateway()
+    return bytes(chunks)
+
+
 class TheGamesDBArtworkView(HomeAssistantView):
     """Serve signed TheGamesDB front covers from the Home Assistant origin."""
 
@@ -130,14 +142,7 @@ class TheGamesDBArtworkView(HomeAssistantView):
                         raise web.HTTPBadGateway()
                     if response.content_length is not None and response.content_length > _MAX_IMAGE_BYTES:
                         raise web.HTTPBadGateway()
-                    chunks = bytearray()
-                    async for chunk in response.content.iter_chunked(64 * 1024):
-                        chunks.extend(chunk)
-                        if len(chunks) > _MAX_IMAGE_BYTES:
-                            raise web.HTTPBadGateway()
-                    if not chunks:
-                        raise web.HTTPBadGateway()
-                    body = bytes(chunks)
+                    body = await _async_read_bounded_image(response.content)
                     break
         except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.debug("TheGamesDB artwork proxy request failed: %s", err)
