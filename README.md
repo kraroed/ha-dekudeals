@@ -2,9 +2,11 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.10**
+**Release: 0.4.11**
 
-Version 0.4.10 restores TheGamesDB artwork through the signed, same-origin Home Assistant proxy. The proxy follows up to three redirects only when every destination remains an approved HTTPS TheGamesDB front-cover URL. It validates image content types and enforces an 8 MiB response limit. Collection data, cached artwork metadata, physical inventory, loans, and lending history are preserved.
+Version 0.4.11 adds the `dekudeals.diagnose_artwork` action. It tests a selected game's TheGamesDB front-cover URL directly from the Home Assistant host and reports HTTP status, redirects, content type, content length, and whether image bytes were received in a persistent notification. Bluey is the default test game. This is a diagnostic tool and does not alter collection data, cached artwork metadata, physical inventory, loans, or lending history.
+
+Version 0.4.10 restores TheGamesDB artwork through the signed, same-origin Home Assistant proxy. The proxy follows up to three redirects only when every destination remains an approved HTTPS TheGamesDB front-cover URL. It validates image content types and enforces an 8 MiB response limit.
 
 
 Version 0.4.8 serves TheGamesDB front-cover images through a signed, same-origin Home Assistant endpoint. This avoids direct CDN image requests from the Home Assistant app while restricting the proxy to approved HTTPS front-cover URLs. Redirects are disabled, and image content type and response size are checked. The original cached image URLs, collection data, and physical inventory remain unchanged.
