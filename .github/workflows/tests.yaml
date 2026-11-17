@@ -9,14 +9,17 @@ on:
 jobs:
   parser-tests:
     runs-on: ubuntu-latest
+    # Keep a hung test job from occupying a runner indefinitely.
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install test dependencies
-        run: python -m pip install pytest aiohttp
+        run: python -m pip install pytest pytest-timeout aiohttp
       - name: Compile integration modules
         run: python -m compileall -q custom_components/dekudeals
       - name: Run unit tests
-        run: python -m pytest -q
+        # Emit the stuck test's traceback after one minute; job timeout is a final backstop.
+        run: python -m pytest -q --timeout=60
