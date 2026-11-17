@@ -1,5 +1,6 @@
 """Tests for the signed same-origin TheGamesDB artwork proxy."""
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -63,11 +64,10 @@ def test_allows_only_same_host_front_cover_redirects():
     assert _safe_redirect_target(source, None) is None
 
 
-@pytest.mark.asyncio
-async def test_view_reads_hass_from_request_app():
+def test_view_reads_hass_from_request_app():
     """A missing entry returns 404 without relying on a view hass attribute."""
     hass = SimpleNamespace(data={DOMAIN: {"entries": {}}})
     request = SimpleNamespace(app={"hass": hass}, query={})
 
     with pytest.raises(web.HTTPNotFound):
-        await TheGamesDBArtworkView().get(request, "missing-entry")
+        asyncio.run(TheGamesDBArtworkView().get(request, "missing-entry"))
