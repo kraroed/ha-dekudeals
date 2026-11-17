@@ -64,7 +64,6 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
         "inventory": inventory,
         "reconciliation_tracker": tracker,
         "reconciliation_task": None,
-        "refresh_lock": None,
         # The unauthenticated image endpoint requires this unguessable,
         # runtime-only secret for every individual config entry.
         "artwork_proxy_secret": secrets.token_urlsafe(32),
