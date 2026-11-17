@@ -7,14 +7,20 @@ import hashlib
 import hmac
 import logging
 import re
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import aiohttp
 from aiohttp import web
 
-from homeassistant.components.http import HomeAssistantView
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+try:
+    from homeassistant.components.http import HomeAssistantView
+except ModuleNotFoundError:  # Allow pure helper tests without installing Home Assistant.
+    class HomeAssistantView:  # type: ignore[no-redef]
+        """Test-only stand-in for the Home Assistant HTTP view base."""
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 
@@ -87,6 +93,8 @@ class DekuDealsArtworkView(HomeAssistantView):
         expected = hmac.new(secret, image_url.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, supplied_signature):
             raise web.HTTPNotFound()
+
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
         session = async_get_clientsession(request.app["hass"])
         try:
