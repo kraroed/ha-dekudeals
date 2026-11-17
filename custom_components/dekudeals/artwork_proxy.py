@@ -77,8 +77,11 @@ class TheGamesDBArtworkView(HomeAssistantView):
 
     async def get(self, request, entry_id: str):
         """Validate the signed URL and return a bounded image response."""
+        # HomeAssistantView instances do not expose a hass attribute.
+        # Resolve Home Assistant from the request application instead.
+        hass = request.app["hass"]
         entry = (
-            self.hass.data.get(DOMAIN, {})
+            hass.data.get(DOMAIN, {})
             .get("entries", {})
             .get(entry_id)
         )
@@ -96,7 +99,7 @@ class TheGamesDBArtworkView(HomeAssistantView):
         ):
             raise web.HTTPNotFound()
 
-        session = async_get_clientsession(self.hass)
+        session = async_get_clientsession(hass)
         current_url = image_url
         try:
             # Follow a small number of CDN redirects manually. Every destination

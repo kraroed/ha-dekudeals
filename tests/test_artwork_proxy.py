@@ -1,10 +1,18 @@
 """Tests for the signed same-origin TheGamesDB artwork proxy."""
 
+import asyncio
+from types import SimpleNamespace
+
+import pytest
+from aiohttp import web
+
 from custom_components.dekudeals.artwork_proxy import (
     build_artwork_proxy_url,
     is_allowed_artwork_url,
     _safe_redirect_target,
+    TheGamesDBArtworkView,
 )
+from custom_components.dekudeals.const import DOMAIN
 
 
 def test_allows_only_https_thegamesdb_front_cover_paths():
@@ -54,3 +62,12 @@ def test_allows_only_same_host_front_cover_redirects():
         source, "https://cdn.thegamesdb.net/images/original/boxart/back/cover.jpg"
     ) is None
     assert _safe_redirect_target(source, None) is None
+
+
+def test_view_reads_hass_from_request_app():
+    """A missing entry returns 404 without relying on a view hass attribute."""
+    hass = SimpleNamespace(data={DOMAIN: {"entries": {}}})
+    request = SimpleNamespace(app={"hass": hass}, query={})
+
+    with pytest.raises(web.HTTPNotFound):
+        asyncio.run(TheGamesDBArtworkView().get(request, "missing-entry"))
