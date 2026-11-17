@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import logging
 import re
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import aiohttp
 from aiohttp import web
@@ -41,6 +41,14 @@ def is_allowed_artwork_url(value: str) -> bool:
         )
     except ValueError:
         return False
+
+
+def _safe_redirect_target(current_url: str, location: str | None) -> str | None:
+    """Resolve a CDN redirect without allowing the proxy to reach another host."""
+    if not location:
+        return None
+    target = urljoin(current_url, location)
+    return target if is_allowed_artwork_url(target) else None
 
 
 def _signature(secret: str, image_url: str) -> str:
@@ -89,22 +97,35 @@ class TheGamesDBArtworkView(HomeAssistantView):
             raise web.HTTPNotFound()
 
         session = async_get_clientsession(self.hass)
+        current_url = image_url
         try:
-            async with session.get(
-                image_url,
-                timeout=aiohttp.ClientTimeout(total=20),
-                allow_redirects=False,
-            ) as response:
-                if response.status != 200:
-                    raise web.HTTPBadGateway()
-                content_type = response.headers.get("Content-Type", "").split(";")[0].lower()
-                if content_type not in _ALLOWED_CONTENT_TYPES:
-                    raise web.HTTPBadGateway()
-                if response.content_length is not None and response.content_length > _MAX_IMAGE_BYTES:
-                    raise web.HTTPBadGateway()
-                body = await response.content.read(_MAX_IMAGE_BYTES + 1)
-                if not body or len(body) > _MAX_IMAGE_BYTES:
-                    raise web.HTTPBadGateway()
+            # Follow a small number of CDN redirects manually. Every destination
+            # must remain an approved TheGamesDB front-cover URL.
+            for redirect_count in range(4):
+                async with session.get(
+                    current_url,
+                    timeout=aiohttp.ClientTimeout(total=20),
+                    allow_redirects=False,
+                ) as response:
+                    if response.status in {301, 302, 303, 307, 308}:
+                        target = _safe_redirect_target(
+                            current_url, response.headers.get("Location")
+                        )
+                        if target is None or redirect_count == 3:
+                            raise web.HTTPBadGateway()
+                        current_url = target
+                        continue
+                    if response.status != 200:
+                        raise web.HTTPBadGateway()
+                    content_type = response.headers.get("Content-Type", "").split(";")[0].lower()
+                    if content_type not in _ALLOWED_CONTENT_TYPES:
+                        raise web.HTTPBadGateway()
+                    if response.content_length is not None and response.content_length > _MAX_IMAGE_BYTES:
+                        raise web.HTTPBadGateway()
+                    body = await response.content.read(_MAX_IMAGE_BYTES + 1)
+                    if not body or len(body) > _MAX_IMAGE_BYTES:
+                        raise web.HTTPBadGateway()
+                    break
         except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.debug("TheGamesDB artwork proxy request failed: %s", err)
             raise web.HTTPBadGateway() from err
