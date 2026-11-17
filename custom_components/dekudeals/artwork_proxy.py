@@ -103,12 +103,17 @@ class TheGamesDBArtworkView(HomeAssistantView):
         current_url = image_url
         try:
             # Follow a small number of CDN redirects manually. Every destination
-            # must remain an approved TheGamesDB front-cover URL.
+            # must remain an approved TheGamesDB front-cover URL. Ask upstream
+            # intermediaries not to substitute a reduced or transformed image.
             for redirect_count in range(4):
                 async with session.get(
                     current_url,
                     timeout=aiohttp.ClientTimeout(total=20),
                     allow_redirects=False,
+                    headers={
+                        "Accept": "image/jpeg,image/png,image/webp,*/*;q=0.8",
+                        "Cache-Control": "no-transform",
+                    },
                 ) as response:
                     if response.status in {301, 302, 303, 307, 308}:
                         target = _safe_redirect_target(
@@ -133,8 +138,10 @@ class TheGamesDBArtworkView(HomeAssistantView):
             _LOGGER.debug("TheGamesDB artwork proxy request failed: %s", err)
             raise web.HTTPBadGateway() from err
 
+        # no-transform also asks reverse proxies and caches between Home
+        # Assistant and the browser to preserve the original image bytes.
         return web.Response(
             body=body,
             content_type=content_type,
-            headers={"Cache-Control": "public, max-age=86400"},
+            headers={"Cache-Control": "public, max-age=86400, no-transform"},
         )
