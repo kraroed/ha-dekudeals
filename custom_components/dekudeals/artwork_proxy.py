@@ -18,7 +18,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 _ALLOWED_HOST = "cdn.thegamesdb.net"
-_ALLOWED_PATH = re.compile(r"/images/original/boxart/front/[A-Za-z0-9._-]+\\Z")
+_ALLOWED_PATH = re.compile(r"/images/original/boxart/front/[A-Za-z0-9._-]+$")
 _ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 _MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
