@@ -30,7 +30,7 @@ def test_unload_waits_for_in_flight_reconciliation_tasks():
         assert sorted(finished) == ["first", "second"]
         assert not tracker.tasks
 
-    asyncio.run(run())
+    asyncio.run(asyncio.wait_for(run(), timeout=5))
 
 
 def test_unload_drains_failed_tasks_without_leaking_task_exceptions():
@@ -45,4 +45,4 @@ def test_unload_drains_failed_tasks_without_leaking_task_exceptions():
         await tracker.async_wait()
         assert not tracker.tasks
 
-    asyncio.run(run())
+    asyncio.run(asyncio.wait_for(run(), timeout=5))
