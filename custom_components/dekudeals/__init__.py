@@ -71,7 +71,11 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
 
     async def _async_reconcile_updated_collection() -> None:
         """Keep physical inventory in sync after a successful live refresh."""
-        await inventory.async_reconcile_collection(coordinator.data or [])
+        try:
+            await inventory.async_reconcile_collection(coordinator.data or [])
+        except Exception:
+            _LOGGER.exception("Failed to reconcile refreshed DekuDeals collection")
+            raise
         async_dispatcher_send(hass, f"{DOMAIN}_{entry.entry_id}_inventory_updated")
 
     def _reconciliation_finished(task: asyncio.Task) -> None:
