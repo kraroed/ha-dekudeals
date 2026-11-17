@@ -120,6 +120,8 @@ def test_provider_does_not_fetch_without_api_key():
 
 
 def test_platform_catalog_failure_is_cached_briefly_then_retried(monkeypatch):
+    from types import SimpleNamespace
+
     from custom_components.dekudeals import thegamesdb as module
 
     class FailingOnceSession(FakeSession):
@@ -135,7 +137,7 @@ def test_platform_catalog_failure_is_cached_briefly_then_retried(monkeypatch):
 
     async def run():
         clock = [1000.0]
-        monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+        monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
         session = FailingOnceSession()
         provider = TheGamesDBArtworkProvider(session, "test-key")
 
