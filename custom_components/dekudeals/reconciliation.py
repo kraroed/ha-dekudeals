@@ -11,7 +11,7 @@ from typing import Any
 
 def _normalize(value: Any) -> str:
     """Normalize a value for matching without changing its displayed form."""
-    return re.sub(r"\\s+", " ", str(value or "").strip()).casefold()
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
 
 
 def _identity_for(item: dict[str, Any]) -> str:
