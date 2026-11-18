@@ -2,7 +2,9 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.18**
+**Release: 0.4.19**
+
+Version 0.4.19 adds service-boundary diagnostics for `dekudeals.refresh_artwork`, logging when the service is received, which config entry is selected, whether the refresh completes, and any exception raised by the handler.
 
 Version 0.4.18 adds exact-title, exact-platform TheGamesDB lookups for DLC parent games that are not present in the collection. Verified parent front covers are cached and reused across matching DLC, with bounded lookup volume and retry intervals. Existing verified standalone DLC artwork retains priority.
 
