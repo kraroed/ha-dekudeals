@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
+from homeassistant.components.sensor import (\n    SensorEntity,\n    SensorEntityDescription,\n    SensorStateClass,\n)
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -21,7 +21,7 @@ COLLECTION_DESCRIPTIONS = (
     SensorEntityDescription(key="physical_games", name="Physical Games", icon="mdi:gamepad"),
     SensorEntityDescription(key="digital_games", name="Digital Games", icon="mdi:download"),
     SensorEntityDescription(key="dlc_items", name="DLC Items", icon="mdi:download-box"),
-    SensorEntityDescription(\n        key="artwork_coverage",\n        name="Artwork URL Coverage",\n        icon="mdi:image-check",\n        native_unit_of_measurement="%",\n        state_class="measurement",\n    ),
+    SensorEntityDescription(\n        key="artwork_coverage",\n        name="Artwork URL Coverage",\n        icon="mdi:image-check",\n        native_unit_of_measurement="%",\n        state_class=SensorStateClass.MEASUREMENT,\n    ),
 )
 
 INVENTORY_DESCRIPTIONS = (
