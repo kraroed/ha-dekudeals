@@ -211,7 +211,7 @@ def test_provider_diagnostic_marks_malformed_platform_catalog_retryable():
         ) == (None, "invalid_platform_catalog")
         assert await provider.async_get_front_cover_diagnostic(
             "Example Game", "Switch"
-        ) == (None, "platform_catalog_unavailable")
+        ) == (None, "invalid_platform_catalog")
         assert await provider.async_get_front_cover(
             "Example Game", "Switch"
         ) == (None, False)
