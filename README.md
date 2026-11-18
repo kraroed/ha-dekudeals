@@ -2,9 +2,11 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.16**
+**Release: 0.4.18**
 
-Version 0.4.16 fixes a missing import that caused metadata enrichment to fail when applying verified parent-game artwork to DLC. Version 0.4.15 introduced conservative artwork inheritance: DLC can reuse a verified parent game's cover only when the DekuDeals item page explicitly identifies the parent. Standalone verified DLC covers retain priority, and inherited artwork is marked with `artwork_inherited: true`.
+Version 0.4.18 adds exact-title, exact-platform TheGamesDB lookups for DLC parent games that are not present in the collection. Verified parent front covers are cached and reused across matching DLC, with bounded lookup volume and retry intervals. Existing verified standalone DLC artwork retains priority.
+
+Version 0.4.17 adds detailed missing-artwork diagnostics, including counts and sample titles grouped by reason. Version 0.4.16 fixes a missing import that caused metadata enrichment to fail when applying verified parent-game artwork to DLC. Version 0.4.15 introduced conservative artwork inheritance: DLC can reuse a verified parent game's cover only when the DekuDeals item page explicitly identifies the parent. Standalone verified DLC covers retain priority, and inherited artwork is marked with `artwork_inherited: true`.
 
 Version 0.4.14 adds the Artwork URL Coverage diagnostic sensor, reports its value as a Home Assistant percentage measurement, and retries transient TheGamesDB lookup failures on the next collection refresh instead of suppressing them for seven days. Definitive no-match lookups retain the normal seven-day retry interval.
 
