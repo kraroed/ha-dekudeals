@@ -2,7 +2,13 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.10**
+**Release: 0.4.13**
+
+Version 0.4.13 fixes incomplete artwork downloads by reading the complete upstream image stream in bounded chunks, enforcing the 8 MiB limit during streaming, and asking upstream servers and caches not to transform the original image bytes. This preserves sharp, fully loaded cover art in Lovelace.
+
+Version 0.4.12 fixes the artwork proxy's Home Assistant request context so signed artwork URLs are served correctly.
+
+Version 0.4.11 adds in-app artwork diagnostics to help distinguish provider/CDN failures from Lovelace display issues.
 
 Version 0.4.10 restores TheGamesDB artwork through the signed, same-origin Home Assistant proxy. The proxy follows up to three redirects only when every destination remains an approved HTTPS TheGamesDB front-cover URL. It validates image content types and enforces an 8 MiB response limit. Collection data, cached artwork metadata, physical inventory, loans, and lending history are preserved.
 
