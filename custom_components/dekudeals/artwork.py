@@ -87,6 +87,53 @@ def select_thegamesdb_front_cover(
 
 
 
+
+def apply_parent_game_artwork(
+    items: list[dict[str, Any]],
+    metadata_cache: dict[str, dict[str, Any]],
+) -> int:
+    """Use a verified parent game's cover for DLC without its own verified cover."""
+    verified_parent_covers: dict[str, str] = {}
+    for item in items:
+        if item.get("item_type") == "dlc":
+            continue
+        name, link = item.get("name"), item.get("link")
+        if not isinstance(name, str) or not isinstance(link, str):
+            continue
+        cached = metadata_cache.get(link)
+        if (
+            isinstance(cached, dict)
+            and cached.get("artwork_verified") is True
+            and isinstance(cached.get("image"), str)
+            and cached["image"].strip()
+        ):
+            verified_parent_covers.setdefault(normalize_game_title(name), cached["image"])
+
+    inherited = 0
+    for item in items:
+        if item.get("item_type") != "dlc":
+            continue
+        parent_game, link = item.get("parent_game"), item.get("link")
+        if not isinstance(parent_game, str) or not parent_game.strip() or not isinstance(link, str):
+            continue
+        child_cache = metadata_cache.get(link)
+        if (
+            isinstance(child_cache, dict)
+            and child_cache.get("artwork_verified") is True
+            and isinstance(child_cache.get("image"), str)
+            and child_cache["image"].strip()
+        ):
+            item["image"] = child_cache["image"]
+            item.pop("artwork_inherited", None)
+            continue
+        parent_cover = verified_parent_covers.get(normalize_game_title(parent_game))
+        if not parent_cover:
+            continue
+        item["image"] = parent_cover
+        item["artwork_inherited"] = True
+        inherited += 1
+    return inherited
+
 def summarize_artwork_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize cover availability without exposing an unbounded missing-title list."""
     missing = [
