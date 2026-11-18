@@ -105,6 +105,8 @@ def test_artwork_coverage_reports_counts_and_missing_titles():
         "artwork_missing_samples_by_reason": {
             "not_classified": ["Game Two", "Game Three"]
         },
+        "artwork_lookup_status_counts": {},
+        "artwork_missing_samples_by_lookup_status": {},
     }
 
 
@@ -345,3 +347,23 @@ def test_parent_cover_is_not_inherited_across_different_platforms():
     assert apply_parent_game_artwork(items, cache, "Switch") == 0
     assert "image" not in dlc
     assert dlc["artwork_missing_reason"] == "parent_not_in_collection"
+
+
+
+def test_artwork_coverage_exposes_lookup_status_counts_and_missing_samples():
+    result = summarize_artwork_coverage([
+        {"name": "Covered", "image": "https://cdn.example/cover.jpg", "artwork_lookup_status": "verified_cover"},
+        {"name": "No match", "artwork_lookup_status": "no_game_candidates"},
+        {"name": "Provider timeout", "artwork_lookup_status": "provider_request_error"},
+        {"name": "Not attempted"},
+    ])
+
+    assert result["artwork_lookup_status_counts"] == {
+        "no_game_candidates": 1,
+        "provider_request_error": 1,
+        "verified_cover": 1,
+    }
+    assert result["artwork_missing_samples_by_lookup_status"] == {
+        "no_game_candidates": ["No match"],
+        "provider_request_error": ["Provider timeout"],
+    }
