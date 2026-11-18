@@ -158,3 +158,62 @@ def test_platform_catalog_failure_is_cached_briefly_then_retried(monkeypatch):
         assert session.attempts == 3
 
     asyncio.run(run())
+
+
+
+def test_provider_diagnostic_distinguishes_no_game_candidates():
+    async def run():
+        session = FakeSession([
+            _platforms_payload(),
+            {"data": {"games": []}},
+            {"data": {"games": []}},
+        ])
+        provider = TheGamesDBArtworkProvider(session, "test-key")
+
+        assert await provider.async_get_front_cover_diagnostic(
+            "Missing Game", "Switch"
+        ) == (None, "no_game_candidates")
+        assert await provider.async_get_front_cover(
+            "Missing Game", "Switch"
+        ) == (None, True)
+
+    asyncio.run(run())
+
+
+def test_provider_diagnostic_distinguishes_candidate_without_verified_front_cover():
+    async def run():
+        payload = _games_payload()
+        payload["include"]["boxart"]["data"]["42"] = [
+            {
+                "type": "boxart",
+                "side": "back",
+                "filename": "boxart/back.jpg",
+                "resolution": "600x900",
+            }
+        ]
+        session = FakeSession([_platforms_payload(), payload])
+        provider = TheGamesDBArtworkProvider(session, "test-key")
+
+        assert await provider.async_get_front_cover_diagnostic(
+            "Example Game", "Switch"
+        ) == (None, "no_verified_front_cover")
+
+    asyncio.run(run())
+
+
+def test_provider_diagnostic_marks_malformed_platform_catalog_retryable():
+    async def run():
+        session = FakeSession([{"data": {"platforms": []}}])
+        provider = TheGamesDBArtworkProvider(session, "test-key")
+
+        assert await provider.async_get_front_cover_diagnostic(
+            "Example Game", "Switch"
+        ) == (None, "invalid_platform_catalog")
+        assert await provider.async_get_front_cover_diagnostic(
+            "Example Game", "Switch"
+        ) == (None, "invalid_platform_catalog")
+        assert await provider.async_get_front_cover(
+            "Example Game", "Switch"
+        ) == (None, False)
+
+    asyncio.run(run())
