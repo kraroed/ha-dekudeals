@@ -213,11 +213,21 @@ def summarize_artwork_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     missing = [str(item.get("name") or "Unknown title") for item in missing_items]
     by_reason: dict[str, list[str]] = {}
+    lookup_status_counts: dict[str, int] = {}
+    lookup_status_samples: dict[str, list[str]] = {}
+    for item in items:
+        status = item.get("artwork_lookup_status")
+        if isinstance(status, str) and status:
+            lookup_status_counts[status] = lookup_status_counts.get(status, 0) + 1
     for item in missing_items:
+        name = str(item.get("name") or "Unknown title")
         reason = item.get("artwork_missing_reason", "not_classified")
         if not isinstance(reason, str):
             reason = "not_classified"
-        by_reason.setdefault(reason, []).append(str(item.get("name") or "Unknown title"))
+        by_reason.setdefault(reason, []).append(name)
+        status = item.get("artwork_lookup_status")
+        if isinstance(status, str) and status:
+            lookup_status_samples.setdefault(status, []).append(name)
     total = len(items)
     with_artwork = total - len(missing)
     return {
@@ -232,5 +242,9 @@ def summarize_artwork_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "artwork_missing_samples_by_reason": {
             reason: names[:10] for reason, names in sorted(by_reason.items())
+        },
+        "artwork_lookup_status_counts": dict(sorted(lookup_status_counts.items())),
+        "artwork_missing_samples_by_lookup_status": {
+            status: names[:10] for status, names in sorted(lookup_status_samples.items())
         },
     }
