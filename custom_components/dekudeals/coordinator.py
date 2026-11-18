@@ -162,10 +162,20 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         async def lookup(cache_key: str, title: str, platform: str) -> None:
             nonlocal lookups_found, lookups_checked
             async with semaphore:
-                cover, checked = await self._artwork_provider.async_get_front_cover(
+                cover, status = await self._artwork_provider.async_get_front_cover_diagnostic(
                     title, platform
                 )
-                if not checked:
+                completed = status in {
+                    "verified_cover",
+                    "platform_unmapped",
+                    "no_game_candidates",
+                    "no_verified_front_cover",
+                }
+                if not completed:
+                    previous = self._metadata_cache.get(cache_key, {})
+                    previous["artwork_lookup_status"] = status
+                    previous["last_lookup_attempt_at"] = time.time()
+                    self._metadata_cache[cache_key] = previous
                     return
                 checked_at = time.time()
                 lookups_checked += 1
@@ -173,7 +183,8 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     "checked_at": checked_at,
                     "thegamesdb_checked_at": checked_at,
                     "artwork_verified": bool(cover),
-                    "artwork_source": "thegamesdb" if cover else "thegamesdb_no_match",
+                    "artwork_source": "thegamesdb" if cover else "thegamesdb_no_verified_cover",
+                    "artwork_lookup_status": status,
                     "parent_title": title,
                     "platform": platform,
                 }
@@ -346,17 +357,25 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 # export already contains a landscape/promotional image.
                 provider_checked = False
                 provider_cover = None
+                provider_status = "provider_not_configured"
                 if self._artwork_provider is not None:
                     provider_attempts += 1
+                    lookup_platform = resolve_item_platform(enriched[index], self.platform) or self.platform
                     _LOGGER.debug(
                         "Attempting TheGamesDB front-cover lookup for %r on %r",
                         enriched[index].get("name"),
-                        resolve_item_platform(enriched[index], self.platform),
+                        lookup_platform,
                     )
-                    provider_cover, provider_checked = await self._artwork_provider.async_get_front_cover(
+                    provider_cover, provider_status = await self._artwork_provider.async_get_front_cover_diagnostic(
                         str(enriched[index].get("name") or ""),
-                        resolve_item_platform(enriched[index], self.platform) or self.platform,
+                        lookup_platform,
                     )
+                    provider_checked = provider_status in {
+                        "verified_cover",
+                        "platform_unmapped",
+                        "no_game_candidates",
+                        "no_verified_front_cover",
+                    }
                     if provider_cover:
                         artwork_found += 1
 
@@ -401,9 +420,10 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 )
                 cache_entry["artwork_source"] = (
                     "thegamesdb" if (provider_cover or previous_artwork_verified)
-                    else "thegamesdb_unavailable" if provider_checked
-                    else cache_entry.get("artwork_source", "dekudeals")
+                    else "thegamesdb_no_verified_cover" if provider_checked
+                    else "dekudeals"
                 )
+                cache_entry["artwork_lookup_status"] = provider_status
                 cache_entry["artwork_revalidated_at"] = time.time()
                 if provider_checked:
                     cache_entry["thegamesdb_checked_at"] = time.time()
@@ -430,6 +450,11 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             provider_attempts,
             artwork_found,
         )
+        for item in enriched:
+            link = item.get("link")
+            cached = self._metadata_cache.get(link) if isinstance(link, str) else None
+            if isinstance(cached, dict) and isinstance(cached.get("artwork_lookup_status"), str):
+                item["artwork_lookup_status"] = cached["artwork_lookup_status"]
         try:
             await self._metadata_store.async_save(
                 {"items": self._metadata_cache, "cursor": self._metadata_cursor}
