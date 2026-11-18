@@ -166,6 +166,7 @@ def test_provider_diagnostic_distinguishes_no_game_candidates():
         session = FakeSession([
             _platforms_payload(),
             {"data": {"games": []}},
+            {"data": {"games": []}},
         ])
         provider = TheGamesDBArtworkProvider(session, "test-key")
 
