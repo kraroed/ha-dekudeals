@@ -100,6 +100,7 @@ def parent_artwork_cache_key(parent_title: str, platform: str) -> str:
 def apply_parent_game_artwork(
     items: list[dict[str, Any]],
     metadata_cache: dict[str, dict[str, Any]],
+    default_platform: str | None = None,
 ) -> int:
     """Reuse verified collection or external parent covers and annotate gaps."""
     collection_games: set[str] = set()
@@ -156,7 +157,7 @@ def apply_parent_game_artwork(
         normalized_parent = normalize_game_title(parent_game)
         parent_cover = verified_parent_covers.get(normalized_parent)
         if not parent_cover:
-            platform = item.get("platform")
+            platform = item.get("platform") or default_platform
             if isinstance(platform, str) and platform.strip():
                 external_cache = metadata_cache.get(
                     parent_artwork_cache_key(parent_game, platform)
@@ -175,8 +176,13 @@ def apply_parent_game_artwork(
             inherited += 1
         elif normalized_parent not in collection_games:
             external_cache = (
-                metadata_cache.get(parent_artwork_cache_key(parent_game, str(item.get("platform") or "")))
-                if isinstance(item.get("platform"), str)
+                metadata_cache.get(
+                    parent_artwork_cache_key(
+                        parent_game,
+                        str(item.get("platform") or default_platform or ""),
+                    )
+                )
+                if isinstance(item.get("platform") or default_platform, str)
                 else None
             )
             if isinstance(external_cache, dict) and external_cache.get("checked_at"):
