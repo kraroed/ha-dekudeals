@@ -2,11 +2,13 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.15**
+**Release: 0.4.16**
 
-Version 0.4.15 reuses a verified parent game's cover for DLC entries that lack verified standalone artwork, but only when the DekuDeals item page explicitly identifies the parent. Standalone verified DLC covers retain priority, and inherited artwork is marked with `artwork_inherited: true`.
+Version 0.4.16 fixes a missing import that caused metadata enrichment to fail when applying verified parent-game artwork to DLC. Version 0.4.15 introduced conservative artwork inheritance: DLC can reuse a verified parent game's cover only when the DekuDeals item page explicitly identifies the parent. Standalone verified DLC covers retain priority, and inherited artwork is marked with `artwork_inherited: true`.
 
-Version 0.4.14 adds the Artwork URL Coverage diagnostic sensor, reports its value as a Home Assistant percentage measurement, and retries transient TheGamesDB lookup failures on the next collection refresh instead of suppressing them for seven days. Definitive no-match lookups retain the normal seven-day retry interval.\n\nVersion 0.4.13 fixes incomplete artwork downloads by reading the complete upstream image stream in bounded chunks, enforcing the 8 MiB limit during streaming, and asking upstream servers and caches not to transform the original image bytes. This preserves sharp, fully loaded cover art in Lovelace.
+Version 0.4.14 adds the Artwork URL Coverage diagnostic sensor, reports its value as a Home Assistant percentage measurement, and retries transient TheGamesDB lookup failures on the next collection refresh instead of suppressing them for seven days. Definitive no-match lookups retain the normal seven-day retry interval.
+
+Version 0.4.13 fixes incomplete artwork downloads by reading the complete upstream image stream in bounded chunks, enforcing the 8 MiB limit during streaming, and asking upstream servers and caches not to transform the original image bytes. This preserves sharp, fully loaded cover art in Lovelace.
 
 Version 0.4.12 fixes the artwork proxy's Home Assistant request context so signed artwork URLs are served correctly.
 
