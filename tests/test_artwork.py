@@ -267,7 +267,7 @@ def test_dlc_does_not_inherit_unverified_external_parent_cover():
 
     assert apply_parent_game_artwork(
         items,
-        {key: {"image": "https://cdn.example/unverified.jpg", "artwork_verified": False}},
+        {key: {"image": "https://cdn.example/unverified.jpg", "artwork_verified": False, "checked_at": 12345}},
     ) == 0
     assert "image" not in items[0]
     assert items[0]["artwork_missing_reason"] == "external_parent_cover_unavailable"
