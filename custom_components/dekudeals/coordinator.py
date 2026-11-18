@@ -16,7 +16,12 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .artwork import (\n    apply_parent_game_artwork,\n    normalize_game_title,\n    parent_artwork_cache_key,\n    resolve_item_platform,\n)
+from .artwork import (
+    apply_parent_game_artwork,
+    normalize_game_title,
+    parent_artwork_cache_key,
+    resolve_item_platform,
+)
 from .const import DOMAIN
 from .importer import CollectionImportError, filter_collection_platform, parse_collection_export
 from .metadata import extract_game_metadata, is_dekudeals_item_url
