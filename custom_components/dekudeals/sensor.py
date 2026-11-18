@@ -20,6 +20,7 @@ COLLECTION_DESCRIPTIONS = (
     SensorEntityDescription(key="physical_games", name="Physical Games", icon="mdi:gamepad"),
     SensorEntityDescription(key="digital_games", name="Digital Games", icon="mdi:download"),
     SensorEntityDescription(key="dlc_items", name="DLC Items", icon="mdi:download-box"),
+    SensorEntityDescription(key="artwork_coverage", name="Artwork Coverage", icon="mdi:image-check"),
 )
 
 INVENTORY_DESCRIPTIONS = (
@@ -104,12 +105,36 @@ class DekuDealsSensor(CoordinatorEntity, SensorEntity):
             return sum(item["format"] == "physical" for item in games)
         if key == "digital_games":
             return sum(item["format"] == "digital" for item in games)
+        if key == "artwork_coverage":
+            total = len(items)
+            with_artwork = sum(
+                isinstance(item.get("image"), str) and bool(item["image"].strip())
+                for item in items
+            )
+            return round(with_artwork * 100 / total) if total else 0
         return 0
 
     @property
     def extra_state_attributes(self):
-        """Expose a bounded snapshot with same-origin URLs for TheGamesDB art."""
+        """Expose collection artwork coverage or a bounded item snapshot."""
         items = self.coordinator.data or []
+        if self.entity_description.key == "artwork_coverage":
+            missing = [
+                str(item.get("name") or "Unknown title")
+                for item in items
+                if not isinstance(item.get("image"), str) or not item["image"].strip()
+            ]
+            with_artwork = len(items) - len(missing)
+            return {
+                "total_items": len(items),
+                "items_with_artwork": with_artwork,
+                "items_missing_artwork": len(missing),
+                "coverage_percent": (
+                    round(with_artwork * 100 / len(items)) if items else 0
+                ),
+                "missing_artwork_sample": missing[:25],
+                "missing_artwork_sample_truncated": len(missing) > 25,
+            }
         exposed_items = []
         for source_item in items[:MAX_LIST_ITEMS]:
             item = dict(source_item)
