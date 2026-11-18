@@ -116,14 +116,30 @@ def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def refresh_artwork(call: ServiceCall) -> None:
-        """Force artwork lookups and log each service boundary."""
+        """Force artwork lookups and report progress in the HA notification center."""
+        notification_id = "dekudeals_artwork_refresh"
+        requested_entry = call.data.get(ATTR_CONFIG_ENTRY_ID, "auto")
+        persistent_notification.async_create(
+            hass,
+            "The artwork refresh service was called. Resolving the configured collection…",
+            title="DekuDeals artwork refresh",
+            notification_id=notification_id,
+        )
         _LOGGER.info(
             "Artwork refresh service received (config_entry_id=%s)",
-            call.data.get(ATTR_CONFIG_ENTRY_ID, "auto"),
+            requested_entry,
         )
+        entry_id = None
         try:
             entry_id, _inventory = _get_inventory(hass, call)
             entry_data = hass.data[DOMAIN]["entries"][entry_id]
+            persistent_notification.async_create(
+                hass,
+                f"Starting a forced artwork refresh for config entry `{entry_id}`. "
+                "This notification will update when the refresh finishes.",
+                title="DekuDeals artwork refresh",
+                notification_id=notification_id,
+            )
             _LOGGER.info(
                 "Artwork refresh service selected config entry %s; invoking coordinator",
                 entry_id,
@@ -131,9 +147,24 @@ def async_setup_services(hass: HomeAssistant) -> None:
             await _refresh_and_reconcile(
                 entry_data, entry_data["coordinator"].async_refresh_artwork
             )
-        except Exception:
+        except Exception as err:
             _LOGGER.exception("Artwork refresh service failed")
+            persistent_notification.async_create(
+                hass,
+                f"Artwork refresh failed"
+                + (f" for config entry `{entry_id}`" if entry_id else "")
+                + f": {type(err).__name__}: {err}",
+                title="DekuDeals artwork refresh failed",
+                notification_id=notification_id,
+            )
             raise
+        persistent_notification.async_create(
+            hass,
+            f"Artwork refresh completed successfully for config entry `{entry_id}`. "
+            "Check the Artwork URL Coverage sensor to see whether coverage changed.",
+            title="DekuDeals artwork refresh complete",
+            notification_id=notification_id,
+        )
         _LOGGER.info(
             "Artwork refresh service completed for config entry %s", entry_id
         )
