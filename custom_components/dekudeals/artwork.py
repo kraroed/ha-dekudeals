@@ -84,3 +84,23 @@ def select_thegamesdb_front_cover(
             if parsed.scheme == "https" and parsed.hostname == urlparse(base_url).hostname:
                 return image_url
     return None
+
+
+
+def summarize_artwork_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize cover availability without exposing an unbounded missing-title list."""
+    missing = [
+        str(item.get("name") or "Unknown title")
+        for item in items
+        if not isinstance(item.get("image"), str) or not item["image"].strip()
+    ]
+    total = len(items)
+    with_artwork = total - len(missing)
+    return {
+        "total_items": total,
+        "items_with_artwork": with_artwork,
+        "items_missing_artwork": len(missing),
+        "coverage_percent": round(with_artwork * 100 / total) if total else 0,
+        "missing_artwork_sample": missing[:25],
+        "missing_artwork_sample_truncated": len(missing) > 25,
+    }
