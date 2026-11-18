@@ -1,4 +1,4 @@
-"""TheGamesDB API client for verified front box-art lookup."""
+"""TheGamesDB API client for verified front-cover artwork lookup."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ class TheGamesDBArtworkProvider:
         self._session = session
         self._api_key = api_key.strip()
         self._platform_ids: dict[str, int] | None = None
+        self._platform_catalog_valid: bool | None = None
         self._platform_lock = asyncio.Lock()
         self._platform_retry_after = 0.0
 
@@ -32,8 +33,6 @@ class TheGamesDBArtworkProvider:
         if self._platform_ids is not None and self._platform_retry_after == 0:
             return self._platform_ids
 
-        # Multiple game lookups can start together during a collection refresh.
-        # Serialize the initial platform request so we only fetch this catalog once.
         async with self._platform_lock:
             if self._platform_ids is not None and time.monotonic() < self._platform_retry_after:
                 return self._platform_ids
@@ -48,31 +47,33 @@ class TheGamesDBArtworkProvider:
                     response.raise_for_status()
                     payload = await response.json(content_type=None)
             except (aiohttp.ClientError, asyncio.TimeoutError):
-                # Cache transient failures briefly so each game lookup in the
-                # same refresh does not serialize another 20-second timeout.
                 self._platform_ids = {}
+                self._platform_catalog_valid = None
                 self._platform_retry_after = time.monotonic() + 60
                 raise
 
-            if not isinstance(payload, dict):
-                self._platform_ids = {}
-                return self._platform_ids
-            data = payload.get("data")
+            data = payload.get("data") if isinstance(payload, dict) else None
             platforms = data.get("platforms") if isinstance(data, dict) else None
+            if not isinstance(platforms, dict):
+                self._platform_ids = {}
+                self._platform_catalog_valid = False
+                self._platform_retry_after = 0.0
+                return self._platform_ids
+
             result: dict[str, int] = {}
-            if isinstance(platforms, dict):
-                for platform in platforms.values():
-                    if not isinstance(platform, dict):
-                        continue
-                    platform_id = platform.get("id")
-                    name = platform.get("name")
-                    alias = platform.get("alias")
-                    if not isinstance(platform_id, int):
-                        continue
-                    for value in (name, alias):
-                        if isinstance(value, str) and value.strip():
-                            result[normalize_game_title(value)] = platform_id
+            for platform in platforms.values():
+                if not isinstance(platform, dict):
+                    continue
+                platform_id = platform.get("id")
+                name = platform.get("name")
+                alias = platform.get("alias")
+                if not isinstance(platform_id, int):
+                    continue
+                for value in (name, alias):
+                    if isinstance(value, str) and value.strip():
+                        result[normalize_game_title(value)] = platform_id
             self._platform_ids = result
+            self._platform_catalog_valid = True
             self._platform_retry_after = 0.0
             _LOGGER.debug(
                 "TheGamesDB platform catalog loaded: %d normalized platform names",
@@ -80,28 +81,29 @@ class TheGamesDBArtworkProvider:
             )
             return result
 
-    async def async_get_front_cover(
+    async def async_get_front_cover_diagnostic(
         self, title: str, platform: str
-    ) -> tuple[str | None, bool]:
-        """Return a trusted cover and whether the provider lookup completed.
+    ) -> tuple[str | None, str]:
+        """Return a verified cover and a machine-readable lookup outcome.
 
-        A completed no-cover response is a definitive miss. Request failures
-        and malformed responses remain retryable and are not cached as checks.
+        Outcomes distinguish definitive misses from provider/configuration
+        failures so diagnostics never present a transport failure as no match.
         """
-        if not self._api_key or not title.strip() or not platform.strip():
-            return None, False
+        if not self._api_key:
+            return None, "api_key_missing"
+        if not title.strip() or not platform.strip():
+            return None, "invalid_lookup_input"
+
         try:
             platform_ids = await self._async_get_platform_ids()
             if not platform_ids and time.monotonic() < self._platform_retry_after:
-                # The platform catalog request failed recently. Its short-lived
-                # empty cache is not a definitive unknown-platform result.
-                return None, False
+                return None, "platform_catalog_unavailable"
+            if self._platform_catalog_valid is False:
+                return None, "invalid_platform_catalog"
+
             requested_platform = normalize_game_title(platform)
             platform_id = platform_ids.get(requested_platform)
             if platform_id is None:
-                # TheGamesDB often prefixes vendor names (e.g. Sony) while
-                # DekuDeals uses the shorter console label. Accept only a
-                # whole-token prefix/suffix match, never fuzzy similarity.
                 matches = {
                     value
                     for key, value in platform_ids.items()
@@ -115,7 +117,8 @@ class TheGamesDBArtworkProvider:
                     "TheGamesDB has no platform mapping for DekuDeals platform %r",
                     platform,
                 )
-                return None, True
+                return None, "platform_unmapped"
+
             _LOGGER.debug(
                 "TheGamesDB platform mapping for %r resolved to ID %s",
                 platform,
@@ -133,23 +136,41 @@ class TheGamesDBArtworkProvider:
             ) as response:
                 response.raise_for_status()
                 payload: Any = await response.json(content_type=None)
+
             data = payload.get("data") if isinstance(payload, dict) else None
             games = data.get("games") if isinstance(data, dict) else None
             if not isinstance(games, list):
-                _LOGGER.debug("TheGamesDB returned an invalid game-search response for %r", title)
-                return None, False
-            game_count = len(games)
+                _LOGGER.debug(
+                    "TheGamesDB returned an invalid game-search response for %r",
+                    title,
+                )
+                return None, "invalid_game_search_response"
+            if not games:
+                _LOGGER.debug(
+                    "TheGamesDB found no exact-title candidates for %r on %r",
+                    title,
+                    platform,
+                )
+                return None, "no_game_candidates"
+
             cover = select_thegamesdb_front_cover(payload, title, platform_id)
+            if cover:
+                _LOGGER.debug(
+                    "TheGamesDB verified a front cover for %r on %r",
+                    title,
+                    platform,
+                )
+                return cover, "verified_cover"
+
             _LOGGER.debug(
-                "TheGamesDB lookup for %r on platform ID %s returned %d game candidates; verified front cover %s",
+                "TheGamesDB returned %d candidate(s) for %r on %r, but none had "
+                "an exact-title portrait front cover that passed validation",
+                len(games),
                 title,
-                platform_id,
-                game_count,
-                "found" if cover else "not found (no exact-title portrait front box art passed validation)",
+                platform,
             )
-            return cover, True
+            return None, "no_verified_front_cover"
         except aiohttp.ClientResponseError as err:
-            # Never include request parameters or the API key in diagnostics.
             _LOGGER.warning(
                 "TheGamesDB returned HTTP %s while looking up artwork for %r (%s). "
                 "Check the configured API key and TheGamesDB service access.",
@@ -157,7 +178,7 @@ class TheGamesDBArtworkProvider:
                 title,
                 platform,
             )
-            return None, False
+            return None, "provider_http_error"
         except (
             aiohttp.ClientError,
             asyncio.TimeoutError,
@@ -172,4 +193,16 @@ class TheGamesDBArtworkProvider:
                 platform,
                 err,
             )
-            return None, False
+            return None, "provider_request_error"
+
+    async def async_get_front_cover(
+        self, title: str, platform: str
+    ) -> tuple[str | None, bool]:
+        """Return a trusted cover and whether the provider lookup completed."""
+        cover, status = await self.async_get_front_cover_diagnostic(title, platform)
+        return cover, status in {
+            "verified_cover",
+            "platform_unmapped",
+            "no_game_candidates",
+            "no_verified_front_cover",
+        }
