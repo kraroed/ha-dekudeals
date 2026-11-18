@@ -1,6 +1,7 @@
 """Tests for strict external box-art selection."""
 
 from custom_components.dekudeals.artwork import (
+    apply_parent_game_artwork,
     normalize_game_title,
     select_thegamesdb_front_cover,
     summarize_artwork_coverage,
@@ -115,3 +116,72 @@ def test_artwork_coverage_bounds_missing_title_sample():
     assert result["items_missing_artwork"] == 30
     assert len(result["missing_artwork_sample"]) == 25
     assert result["missing_artwork_sample_truncated"] is True
+
+
+
+def test_dlc_inherits_only_explicit_verified_parent_cover():
+    parent_url = "https://dekudeals.com/items/parent"
+    dlc_url = "https://dekudeals.com/items/dlc"
+    items = [
+        {"name": "Parent Game", "link": parent_url, "item_type": "game"},
+        {
+            "name": "Parent Game Expansion",
+            "link": dlc_url,
+            "item_type": "dlc",
+            "parent_game": "Parent Game",
+            "image": "https://example.com/unverified-export-image.jpg",
+        },
+    ]
+    cache = {
+        parent_url: {
+            "image": "https://cdn.example/verified-parent-cover.jpg",
+            "artwork_verified": True,
+        },
+        dlc_url: {"artwork_verified": False},
+    }
+
+    assert apply_parent_game_artwork(items, cache) == 1
+    assert items[1]["image"] == "https://cdn.example/verified-parent-cover.jpg"
+    assert items[1]["artwork_inherited"] is True
+
+
+def test_dlc_keeps_its_own_verified_cover_instead_of_parent_cover():
+    parent_url = "https://dekudeals.com/items/parent"
+    dlc_url = "https://dekudeals.com/items/dlc"
+    items = [
+        {"name": "Parent Game", "link": parent_url, "item_type": "game"},
+        {
+            "name": "Parent Game Expansion",
+            "link": dlc_url,
+            "item_type": "dlc",
+            "parent_game": "Parent Game",
+        },
+    ]
+    cache = {
+        parent_url: {"image": "https://cdn.example/parent.jpg", "artwork_verified": True},
+        dlc_url: {"image": "https://cdn.example/dlc.jpg", "artwork_verified": True},
+    }
+
+    assert apply_parent_game_artwork(items, cache) == 0
+    assert items[1]["image"] == "https://cdn.example/dlc.jpg"
+    assert "artwork_inherited" not in items[1]
+
+
+def test_unverified_parent_artwork_is_never_inherited():
+    parent_url = "https://dekudeals.com/items/parent"
+    dlc_url = "https://dekudeals.com/items/dlc"
+    items = [
+        {"name": "Parent Game", "link": parent_url, "item_type": "game"},
+        {
+            "name": "Parent Game Expansion",
+            "link": dlc_url,
+            "item_type": "dlc",
+            "parent_game": "Parent Game",
+        },
+    ]
+    cache = {
+        parent_url: {"image": "https://cdn.example/unverified.jpg", "artwork_verified": False}
+    }
+
+    assert apply_parent_game_artwork(items, cache) == 0
+    assert "image" not in items[1]
