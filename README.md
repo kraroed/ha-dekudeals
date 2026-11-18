@@ -2,7 +2,9 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.20**
+**Release: 0.4.21**
+
+Version 0.4.21 improves artwork coverage for DLC and makes TheGamesDB lookup outcomes diagnosable. DLC parent artwork inheritance now resolves missing or `Unknown` item platforms using the configured console, and only reuses a verified parent cover from the same platform. TheGamesDB lookups now expose explicit per-item statuses for missing API keys, platform mapping, provider/network failures, exact-title misses, and covers that fail verification. Transient failures remain eligible for retry, while definitive misses retain their retry interval. The Artwork URL Coverage sensor now includes bounded counts and samples grouped by lookup status.
 
 Version 0.4.20 adds persistent Home Assistant notifications for `dekudeals.refresh_artwork`. The notification updates when the service is called, when the forced refresh starts, and when it completes or fails, so progress is visible without searching the logs.
 
@@ -21,7 +23,6 @@ Version 0.4.12 fixes the artwork proxy's Home Assistant request context so signe
 Version 0.4.11 adds in-app artwork diagnostics to help distinguish provider/CDN failures from Lovelace display issues.
 
 Version 0.4.10 restores TheGamesDB artwork through the signed, same-origin Home Assistant proxy. The proxy follows up to three redirects only when every destination remains an approved HTTPS TheGamesDB front-cover URL. It validates image content types and enforces an 8 MiB response limit. Collection data, cached artwork metadata, physical inventory, loans, and lending history are preserved.
-
 
 Version 0.4.8 serves TheGamesDB front-cover images through a signed, same-origin Home Assistant endpoint. This avoids direct CDN image requests from the Home Assistant app while restricting the proxy to approved HTTPS front-cover URLs. Redirects are disabled, and image content type and response size are checked. The original cached image URLs, collection data, and physical inventory remain unchanged.
 
@@ -113,7 +114,7 @@ Rows are not deduplicated. Each physical row represents a separate collection co
 
 - **Games** — imported full-game rows, excluding DLC.
 - **DLC Items** — imported DLC rows.
-- **Artwork URL Coverage** — percentage of collection rows with a non-empty artwork URL (not a live image-validity check); attributes include total, covered, missing counts, up to 25 missing titles, `artwork_missing_by_reason` counts, and up to 10 sample titles per reason. Missing-artwork reasons distinguish `standalone_cover_unavailable`, `parent_relationship_missing`, `parent_not_in_collection`, `parent_cover_not_verified`, and `external_parent_cover_unavailable`.
+- **Artwork URL Coverage** — percentage of collection rows with a non-empty artwork URL (not a live image-validity check); attributes include total, covered, missing counts, up to 25 missing titles, `artwork_missing_by_reason` counts, and up to 10 sample titles per reason, plus `artwork_lookup_status_counts` and up to 10 missing-item samples per provider lookup status. Lookup statuses distinguish missing API keys, unavailable or malformed platform catalogs, unmapped platforms, provider/network failures, exact-title misses, unverified front covers, and verified covers.
 - **Switch Games** — rows whose platform is Switch.
 - **Switch 2 Games** — rows whose platform is Switch 2.
 - **Configured Platform Games** — full-game rows for the platform selected in this integration entry; use this sensor for PlayStation, Xbox, retro consoles, or `All Platforms`.
