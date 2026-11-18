@@ -88,11 +88,20 @@ def select_thegamesdb_front_cover(
 
 
 
+def parent_artwork_cache_key(parent_title: str, platform: str) -> str:
+    """Build a stable cache key for an external parent-game artwork lookup."""
+    return (
+        "__thegamesdb_parent__:"
+        f"{normalize_game_title(platform)}:"
+        f"{normalize_game_title(parent_title)}"
+    )
+
+
 def apply_parent_game_artwork(
     items: list[dict[str, Any]],
     metadata_cache: dict[str, dict[str, Any]],
 ) -> int:
-    """Reuse verified parent covers and annotate why missing covers remain."""
+    """Reuse verified collection or external parent covers and annotate gaps."""
     collection_games: set[str] = set()
     verified_parent_covers: dict[str, str] = {}
     for item in items:
@@ -146,13 +155,34 @@ def apply_parent_game_artwork(
 
         normalized_parent = normalize_game_title(parent_game)
         parent_cover = verified_parent_covers.get(normalized_parent)
+        if not parent_cover:
+            platform = item.get("platform")
+            if isinstance(platform, str) and platform.strip():
+                external_cache = metadata_cache.get(
+                    parent_artwork_cache_key(parent_game, platform)
+                )
+                if (
+                    isinstance(external_cache, dict)
+                    and external_cache.get("artwork_verified") is True
+                    and isinstance(external_cache.get("image"), str)
+                    and external_cache["image"].strip()
+                ):
+                    parent_cover = external_cache["image"]
         if parent_cover:
             item["image"] = parent_cover
             item["artwork_inherited"] = True
             item.pop("artwork_missing_reason", None)
             inherited += 1
         elif normalized_parent not in collection_games:
-            item["artwork_missing_reason"] = "parent_not_in_collection"
+            external_cache = (
+                metadata_cache.get(parent_artwork_cache_key(parent_game, str(item.get("platform") or "")))
+                if isinstance(item.get("platform"), str)
+                else None
+            )
+            if isinstance(external_cache, dict) and external_cache.get("checked_at"):
+                item["artwork_missing_reason"] = "external_parent_cover_unavailable"
+            else:
+                item["artwork_missing_reason"] = "parent_not_in_collection"
         else:
             item["artwork_missing_reason"] = "parent_cover_not_verified"
     return inherited
