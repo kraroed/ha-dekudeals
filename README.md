@@ -2,7 +2,9 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.19**
+**Release: 0.4.20**
+
+Version 0.4.20 adds persistent Home Assistant notifications for `dekudeals.refresh_artwork`. The notification updates when the service is called, when the forced refresh starts, and when it completes or fails, so progress is visible without searching the logs.
 
 Version 0.4.19 adds service-boundary diagnostics for `dekudeals.refresh_artwork`, logging when the service is received, which config entry is selected, whether the refresh completes, and any exception raised by the handler.
 
