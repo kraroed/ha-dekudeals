@@ -16,7 +16,12 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .artwork import apply_parent_game_artwork, normalize_game_title, parent_artwork_cache_key
+from .artwork import (
+    apply_parent_game_artwork,
+    normalize_game_title,
+    parent_artwork_cache_key,
+    resolve_item_platform,
+)
 from .const import DOMAIN
 from .importer import CollectionImportError, filter_collection_platform, parse_collection_export
 from .metadata import extract_game_metadata, is_dekudeals_item_url
@@ -122,7 +127,7 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             if item.get("item_type") != "dlc":
                 continue
             parent = item.get("parent_game")
-            platform = item.get("platform") or self.platform
+            platform = resolve_item_platform(item, self.platform)
             if not isinstance(parent, str) or not parent.strip():
                 continue
             if normalize_game_title(parent) in collection_games:
@@ -346,11 +351,11 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     _LOGGER.debug(
                         "Attempting TheGamesDB front-cover lookup for %r on %r",
                         enriched[index].get("name"),
-                        enriched[index].get("platform") or self.platform,
+                        resolve_item_platform(enriched[index], self.platform),
                     )
                     provider_cover, provider_checked = await self._artwork_provider.async_get_front_cover(
                         str(enriched[index].get("name") or ""),
-                        str(enriched[index].get("platform") or self.platform),
+                        resolve_item_platform(enriched[index], self.platform) or self.platform,
                     )
                     if provider_cover:
                         artwork_found += 1
@@ -412,7 +417,7 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
         await asyncio.gather(*(fetch(index, link) for index, link in selected))
         await self._async_lookup_external_parent_artwork(enriched)
-        inherited_count = apply_parent_game_artwork(enriched, self._metadata_cache)
+        inherited_count = apply_parent_game_artwork(enriched, self._metadata_cache, self.platform)
         if inherited_count:
             _LOGGER.debug(
                 "DekuDeals metadata refresh for %s: inherited verified parent-game artwork for %d DLC entries",

@@ -293,3 +293,55 @@ def test_external_parent_artwork_uses_configured_platform_when_item_platform_mis
 
     assert apply_parent_game_artwork(items, cache, "Switch") == 1
     assert items[0]["image"] == "https://cdn.example/verified-parent.jpg"
+
+
+
+def test_unknown_platform_uses_configured_console_for_external_parent_cover():
+    key = parent_artwork_cache_key("Parent Game", "Switch")
+    items = [
+        {
+            "name": "Parent Game Expansion",
+            "item_type": "dlc",
+            "parent_game": "Parent Game",
+            "platform": "Unknown",
+        }
+    ]
+    cache = {
+        key: {
+            "image": "https://cdn.example/verified-parent.jpg",
+            "artwork_verified": True,
+            "checked_at": 12345,
+        }
+    }
+
+    assert apply_parent_game_artwork(items, cache, "Switch") == 1
+    assert items[0]["image"] == "https://cdn.example/verified-parent.jpg"
+
+
+def test_parent_cover_is_not_inherited_across_different_platforms():
+    switch_url = "https://dekudeals.com/items/switch-parent"
+    dlc = {
+        "name": "Parent Game Expansion",
+        "item_type": "dlc",
+        "parent_game": "Parent Game",
+        "platform": "Switch",
+    }
+    items = [
+        {
+            "name": "Parent Game",
+            "link": switch_url,
+            "item_type": "game",
+            "platform": "Nintendo 3DS",
+        },
+        dlc,
+    ]
+    cache = {
+        switch_url: {
+            "image": "https://cdn.example/3ds-parent.jpg",
+            "artwork_verified": True,
+        }
+    }
+
+    assert apply_parent_game_artwork(items, cache, "Switch") == 0
+    assert "image" not in dlc
+    assert dlc["artwork_missing_reason"] == "parent_not_in_collection"

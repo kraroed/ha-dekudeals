@@ -97,22 +97,41 @@ def parent_artwork_cache_key(parent_title: str, platform: str) -> str:
     )
 
 
+def resolve_item_platform(
+    item: dict[str, Any], default_platform: str | None = None
+) -> str | None:
+    """Use the configured console when an export row has no usable platform."""
+    platform = item.get("platform")
+    if isinstance(platform, str) and normalize_game_title(platform) not in {
+        "",
+        "unknown",
+        "all platforms",
+    }:
+        return platform.strip()
+    if isinstance(default_platform, str) and default_platform.strip():
+        return default_platform.strip()
+    return None
+
+
 def apply_parent_game_artwork(
     items: list[dict[str, Any]],
     metadata_cache: dict[str, dict[str, Any]],
     default_platform: str | None = None,
 ) -> int:
-    """Reuse verified collection or external parent covers and annotate gaps."""
-    collection_games: set[str] = set()
-    verified_parent_covers: dict[str, str] = {}
+    """Reuse verified parent covers only within the same console."""
+    collection_games: set[tuple[str, str]] = set()
+    verified_parent_covers: dict[tuple[str, str], str] = {}
     for item in items:
         if item.get("item_type") == "dlc":
             continue
         name, link = item.get("name"), item.get("link")
         if not isinstance(name, str) or not name.strip():
             continue
+        platform = resolve_item_platform(item, default_platform)
+        platform_key = normalize_game_title(platform or "")
         normalized_name = normalize_game_title(name)
-        collection_games.add(normalized_name)
+        game_key = (platform_key, normalized_name)
+        collection_games.add(game_key)
         if not isinstance(link, str):
             continue
         cached = metadata_cache.get(link)
@@ -122,7 +141,7 @@ def apply_parent_game_artwork(
             and isinstance(cached.get("image"), str)
             and cached["image"].strip()
         ):
-            verified_parent_covers.setdefault(normalized_name, cached["image"])
+            verified_parent_covers.setdefault(game_key, cached["image"])
 
     inherited = 0
     for item in items:
@@ -154,37 +173,31 @@ def apply_parent_game_artwork(
             item["artwork_missing_reason"] = "parent_relationship_missing"
             continue
 
-        normalized_parent = normalize_game_title(parent_game)
-        parent_cover = verified_parent_covers.get(normalized_parent)
-        if not parent_cover:
-            platform = item.get("platform") or default_platform
-            if isinstance(platform, str) and platform.strip():
-                external_cache = metadata_cache.get(
-                    parent_artwork_cache_key(parent_game, platform)
-                )
-                if (
-                    isinstance(external_cache, dict)
-                    and external_cache.get("artwork_verified") is True
-                    and isinstance(external_cache.get("image"), str)
-                    and external_cache["image"].strip()
-                ):
-                    parent_cover = external_cache["image"]
+        platform = resolve_item_platform(item, default_platform)
+        game_key = (
+            normalize_game_title(platform or ""),
+            normalize_game_title(parent_game),
+        )
+        parent_cover = verified_parent_covers.get(game_key)
+        external_cache = None
+        if not parent_cover and platform:
+            external_cache = metadata_cache.get(
+                parent_artwork_cache_key(parent_game, platform)
+            )
+            if (
+                isinstance(external_cache, dict)
+                and external_cache.get("artwork_verified") is True
+                and isinstance(external_cache.get("image"), str)
+                and external_cache["image"].strip()
+            ):
+                parent_cover = external_cache["image"]
+
         if parent_cover:
             item["image"] = parent_cover
             item["artwork_inherited"] = True
             item.pop("artwork_missing_reason", None)
             inherited += 1
-        elif normalized_parent not in collection_games:
-            external_cache = (
-                metadata_cache.get(
-                    parent_artwork_cache_key(
-                        parent_game,
-                        str(item.get("platform") or default_platform or ""),
-                    )
-                )
-                if isinstance(item.get("platform") or default_platform, str)
-                else None
-            )
+        elif game_key not in collection_games:
             if isinstance(external_cache, dict) and external_cache.get("checked_at"):
                 item["artwork_missing_reason"] = "external_parent_cover_unavailable"
             else:
@@ -192,7 +205,6 @@ def apply_parent_game_artwork(
         else:
             item["artwork_missing_reason"] = "parent_cover_not_verified"
     return inherited
-
 def summarize_artwork_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize cover availability without exposing an unbounded missing-title list."""
     missing_items = [
