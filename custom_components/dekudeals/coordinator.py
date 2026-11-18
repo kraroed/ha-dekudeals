@@ -16,7 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .artwork import apply_parent_game_artwork
+from .artwork import apply_parent_game_artwork, normalize_game_title, parent_artwork_cache_key
 from .const import DOMAIN
 from .importer import CollectionImportError, filter_collection_platform, parse_collection_export
 from .metadata import extract_game_metadata, is_dekudeals_item_url
@@ -28,6 +28,7 @@ METADATA_MAX_PER_REFRESH = 50
 METADATA_CONCURRENCY = 3
 METADATA_CACHE_TTL = 30 * 24 * 60 * 60
 METADATA_MISS_RETRY_TTL = 7 * 24 * 60 * 60
+PARENT_ARTWORK_MAX_PER_REFRESH = 25
 
 
 class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
@@ -96,6 +97,97 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             len(self._metadata_cache),
         )
         await self.async_request_refresh()
+
+    async def _async_lookup_external_parent_artwork(
+        self, items: list[dict[str, Any]]
+    ) -> None:
+        """Look up exact parent-game covers for DLC whose parent is outside the collection."""
+        if not self._thegamesdb_api_key:
+            return
+        await self._async_load_metadata_cache()
+        assert self._metadata_cache is not None
+        if self._artwork_provider is None:
+            self._artwork_provider = TheGamesDBArtworkProvider(
+                async_get_clientsession(self.hass), self._thegamesdb_api_key
+            )
+
+        collection_games = {
+            normalize_game_title(str(item.get("name") or ""))
+            for item in items
+            if item.get("item_type") != "dlc" and item.get("name")
+        }
+        parents: dict[str, tuple[str, str]] = {}
+        now = time.time()
+        for item in items:
+            if item.get("item_type") != "dlc":
+                continue
+            parent = item.get("parent_game")
+            platform = item.get("platform") or self.platform
+            if not isinstance(parent, str) or not parent.strip():
+                continue
+            if normalize_game_title(parent) in collection_games:
+                continue
+            if not isinstance(platform, str) or not platform.strip():
+                continue
+            cache_key = parent_artwork_cache_key(parent, platform)
+            cached = self._metadata_cache.get(cache_key)
+            ttl = (
+                METADATA_CACHE_TTL
+                if isinstance(cached, dict)
+                and cached.get("artwork_verified") is True
+                and cached.get("image")
+                else METADATA_MISS_RETRY_TTL
+            )
+            if (
+                isinstance(cached, dict)
+                and isinstance(cached.get("checked_at"), (int, float))
+                and now - cached["checked_at"] < ttl
+            ):
+                continue
+            parents.setdefault(cache_key, (parent.strip(), platform.strip()))
+
+        selected = list(parents.items())[:PARENT_ARTWORK_MAX_PER_REFRESH]
+        if not selected:
+            return
+
+        semaphore = asyncio.Semaphore(METADATA_CONCURRENCY)
+        lookups_found = 0
+        lookups_checked = 0
+
+        async def lookup(cache_key: str, title: str, platform: str) -> None:
+            nonlocal lookups_found, lookups_checked
+            async with semaphore:
+                cover, checked = await self._artwork_provider.async_get_front_cover(
+                    title, platform
+                )
+                if not checked:
+                    return
+                checked_at = time.time()
+                lookups_checked += 1
+                cache_entry: dict[str, Any] = {
+                    "checked_at": checked_at,
+                    "thegamesdb_checked_at": checked_at,
+                    "artwork_verified": bool(cover),
+                    "artwork_source": "thegamesdb" if cover else "thegamesdb_no_match",
+                    "parent_title": title,
+                    "platform": platform,
+                }
+                if cover:
+                    cache_entry["image"] = cover
+                    lookups_found += 1
+                self._metadata_cache[cache_key] = cache_entry
+
+        await asyncio.gather(
+            *(lookup(cache_key, title, platform)
+              for cache_key, (title, platform) in selected)
+        )
+        if lookups_checked:
+            _LOGGER.debug(
+                "TheGamesDB external DLC-parent lookup for %s: checked %d unique parents, found %d verified covers",
+                self.platform,
+                lookups_checked,
+                lookups_found,
+            )
 
     async def _async_enrich_metadata(
         self, items: list[dict[str, Any]]
@@ -179,6 +271,7 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 candidates.append((index, link))
 
         if not candidates:
+            await self._async_lookup_external_parent_artwork(enriched)
             inherited_count = apply_parent_game_artwork(enriched, self._metadata_cache)
             if inherited_count:
                 _LOGGER.debug(
@@ -190,6 +283,12 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 "DekuDeals metadata refresh for %s: no eligible missing metadata items",
                 self.platform,
             )
+            try:
+                await self._metadata_store.async_save(
+                    {"items": self._metadata_cache, "cursor": self._metadata_cursor}
+                )
+            except (OSError, ValueError):
+                _LOGGER.warning("Could not save DekuDeals game metadata cache")
             return enriched
 
         start = self._metadata_cursor % len(candidates)
@@ -312,6 +411,7 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 self._metadata_cache[link] = cache_entry
 
         await asyncio.gather(*(fetch(index, link) for index, link in selected))
+        await self._async_lookup_external_parent_artwork(enriched)
         inherited_count = apply_parent_game_artwork(enriched, self._metadata_cache)
         if inherited_count:
             _LOGGER.debug(
