@@ -102,6 +102,7 @@ Rows are not deduplicated. Each physical row represents a separate collection co
 
 - **Games** — imported full-game rows, excluding DLC.
 - **DLC Items** — imported DLC rows.
+- **Artwork Coverage** — percentage of collection rows with cover art; attributes include total, covered, missing counts, and up to 25 missing game titles to help identify artwork lookup gaps.
 - **Switch Games** — rows whose platform is Switch.
 - **Switch 2 Games** — rows whose platform is Switch 2.
 - **Configured Platform Games** — full-game rows for the platform selected in this integration entry; use this sensor for PlayStation, Xbox, retro consoles, or `All Platforms`.
