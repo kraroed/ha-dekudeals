@@ -57,7 +57,8 @@ class TheGamesDBArtworkProvider:
             if not isinstance(platforms, dict):
                 self._platform_ids = {}
                 self._platform_catalog_valid = False
-                self._platform_retry_after = 0.0
+                # Malformed catalog payloads are transient; retry after a short cooldown.
+                self._platform_retry_after = time.monotonic() + 60
                 return self._platform_ids
 
             result: dict[str, int] = {}
