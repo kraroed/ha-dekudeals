@@ -271,3 +271,25 @@ def test_dlc_does_not_inherit_unverified_external_parent_cover():
     ) == 0
     assert "image" not in items[0]
     assert items[0]["artwork_missing_reason"] == "external_parent_cover_unavailable"
+
+
+
+def test_external_parent_artwork_uses_configured_platform_when_item_platform_missing():
+    key = parent_artwork_cache_key("Parent Game", "Switch")
+    items = [
+        {
+            "name": "Parent Game Expansion",
+            "item_type": "dlc",
+            "parent_game": "Parent Game",
+        }
+    ]
+    cache = {
+        key: {
+            "image": "https://cdn.example/verified-parent.jpg",
+            "artwork_verified": True,
+            "checked_at": 12345,
+        }
+    }
+
+    assert apply_parent_game_artwork(items, cache, "Switch") == 1
+    assert items[0]["image"] == "https://cdn.example/verified-parent.jpg"
