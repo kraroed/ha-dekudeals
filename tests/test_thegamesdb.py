@@ -83,7 +83,8 @@ def test_provider_fetches_platform_catalog_once_and_returns_front_cover():
 
         assert result == (
             "https://cdn.thegamesdb.net/images/original/"
-            "boxart/front/42-1.jpg"
+            "boxart/front/42-1.jpg",
+            True,
         )
         assert len(session.calls) == 2
         assert session.calls[0][0].endswith("/Platforms")
@@ -100,7 +101,7 @@ def test_provider_rejects_unknown_platform_without_game_search():
 
         result = await provider.async_get_front_cover("Example Game", "Unknown Console")
 
-        assert result is None
+        assert result == (None, True)
         assert len(session.calls) == 1
 
     asyncio.run(run())
@@ -113,7 +114,7 @@ def test_provider_does_not_fetch_without_api_key():
 
         result = await provider.async_get_front_cover("Example Game", "Switch")
 
-        assert result is None
+        assert result == (None, False)
         assert session.calls == []
 
     asyncio.run(run())
@@ -141,17 +142,18 @@ def test_platform_catalog_failure_is_cached_briefly_then_retried(monkeypatch):
         session = FailingOnceSession()
         provider = TheGamesDBArtworkProvider(session, "test-key")
 
-        assert await provider.async_get_front_cover("Example Game", "Switch") is None
+        assert await provider.async_get_front_cover("Example Game", "Switch") == (None, False)
         assert session.attempts == 1
 
         # A second title lookup in the same refresh reuses the cached failure.
-        assert await provider.async_get_front_cover("Another Game", "Switch") is None
+        assert await provider.async_get_front_cover("Another Game", "Switch") == (None, False)
         assert session.attempts == 1
 
         # The negative cache expires and the provider can recover.
         clock[0] += 61
         assert await provider.async_get_front_cover("Example Game", "Switch") == (
-            "https://cdn.thegamesdb.net/images/original/boxart/front/42-1.jpg"
+            "https://cdn.thegamesdb.net/images/original/boxart/front/42-1.jpg",
+            True,
         )
         assert session.attempts == 3
 
