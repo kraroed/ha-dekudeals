@@ -241,11 +241,10 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         enriched[index].get("name"),
                         enriched[index].get("platform") or self.platform,
                     )
-                    provider_cover = await self._artwork_provider.async_get_front_cover(
+                    provider_cover, provider_checked = await self._artwork_provider.async_get_front_cover(
                         str(enriched[index].get("name") or ""),
                         str(enriched[index].get("platform") or self.platform),
                     )
-                    provider_checked = True
                     if provider_cover:
                         artwork_found += 1
 
