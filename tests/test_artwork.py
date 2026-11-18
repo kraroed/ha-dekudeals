@@ -3,6 +3,7 @@
 from custom_components.dekudeals.artwork import (
     normalize_game_title,
     select_thegamesdb_front_cover,
+    summarize_artwork_coverage,
 )
 
 
@@ -82,3 +83,35 @@ def test_accepts_explicit_front_cover_when_resolution_is_omitted():
     assert select_thegamesdb_front_cover(payload, "Example Game", 4919) == (
         "https://cdn.example/images/original/boxart/front-no-resolution.jpg"
     )
+
+
+
+def test_artwork_coverage_reports_counts_and_missing_titles():
+    result = summarize_artwork_coverage([
+        {"name": "Game One", "image": "https://cdn.example/one.jpg"},
+        {"name": "Game Two", "image": None},
+        {"name": "Game Three", "image": " "},
+    ])
+    assert result == {
+        "total_items": 3,
+        "items_with_artwork": 1,
+        "items_missing_artwork": 2,
+        "coverage_percent": 33,
+        "missing_artwork_sample": ["Game Two", "Game Three"],
+        "missing_artwork_sample_truncated": False,
+    }
+
+
+def test_artwork_coverage_handles_empty_collection():
+    result = summarize_artwork_coverage([])
+    assert result["coverage_percent"] == 0
+    assert result["total_items"] == 0
+
+
+def test_artwork_coverage_bounds_missing_title_sample():
+    result = summarize_artwork_coverage([
+        {"name": f"Game {index}"} for index in range(30)
+    ])
+    assert result["items_missing_artwork"] == 30
+    assert len(result["missing_artwork_sample"]) == 25
+    assert result["missing_artwork_sample_truncated"] is True
