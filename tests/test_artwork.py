@@ -3,6 +3,7 @@
 from custom_components.dekudeals.artwork import (
     apply_parent_game_artwork,
     normalize_game_title,
+    parent_artwork_cache_key,
     select_thegamesdb_front_cover,
     summarize_artwork_coverage,
 )
@@ -224,3 +225,49 @@ def test_missing_artwork_diagnostics_distinguish_dlc_relationship_gaps():
     assert result["artwork_missing_samples_by_reason"]["parent_relationship_missing"] == [
         "Expansion One"
     ]
+
+
+
+def test_dlc_inherits_verified_external_parent_cover_when_parent_is_not_in_collection():
+    parent_title = "Parent Game"
+    platform = "Switch"
+    key = parent_artwork_cache_key(parent_title, platform)
+    items = [
+        {
+            "name": "Parent Game Expansion",
+            "item_type": "dlc",
+            "parent_game": parent_title,
+            "platform": platform,
+        }
+    ]
+    cache = {
+        key: {
+            "image": "https://cdn.example/verified-external-parent.jpg",
+            "artwork_verified": True,
+            "checked_at": 12345,
+        }
+    }
+
+    assert apply_parent_game_artwork(items, cache) == 1
+    assert items[0]["image"] == "https://cdn.example/verified-external-parent.jpg"
+    assert items[0]["artwork_inherited"] is True
+    assert "artwork_missing_reason" not in items[0]
+
+
+def test_dlc_does_not_inherit_unverified_external_parent_cover():
+    key = parent_artwork_cache_key("Parent Game", "Switch")
+    items = [
+        {
+            "name": "Parent Game Expansion",
+            "item_type": "dlc",
+            "parent_game": "Parent Game",
+            "platform": "Switch",
+        }
+    ]
+
+    assert apply_parent_game_artwork(
+        items,
+        {key: {"image": "https://cdn.example/unverified.jpg", "artwork_verified": False}},
+    ) == 0
+    assert "image" not in items[0]
+    assert items[0]["artwork_missing_reason"] == "external_parent_cover_unavailable"
