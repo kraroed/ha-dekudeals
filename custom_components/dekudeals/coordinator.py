@@ -304,6 +304,13 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 self._metadata_cache[link] = cache_entry
 
         await asyncio.gather(*(fetch(index, link) for index, link in selected))
+        inherited_count = apply_parent_game_artwork(enriched, self._metadata_cache)
+        if inherited_count:
+            _LOGGER.debug(
+                "DekuDeals metadata refresh for %s: inherited verified parent-game artwork for %d DLC entries",
+                self.platform,
+                inherited_count,
+            )
         _LOGGER.debug(
             "DekuDeals metadata refresh for %s completed: %d TheGamesDB lookups attempted; %d new verified cover URLs found",
             self.platform,
