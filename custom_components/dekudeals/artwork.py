@@ -92,13 +92,18 @@ def apply_parent_game_artwork(
     items: list[dict[str, Any]],
     metadata_cache: dict[str, dict[str, Any]],
 ) -> int:
-    """Use a verified parent game's cover for DLC without its own verified cover."""
+    """Reuse verified parent covers and annotate why missing covers remain."""
+    collection_games: set[str] = set()
     verified_parent_covers: dict[str, str] = {}
     for item in items:
         if item.get("item_type") == "dlc":
             continue
         name, link = item.get("name"), item.get("link")
-        if not isinstance(name, str) or not isinstance(link, str):
+        if not isinstance(name, str) or not name.strip():
+            continue
+        normalized_name = normalize_game_title(name)
+        collection_games.add(normalized_name)
+        if not isinstance(link, str):
             continue
         cached = metadata_cache.get(link)
         if (
@@ -107,16 +112,24 @@ def apply_parent_game_artwork(
             and isinstance(cached.get("image"), str)
             and cached["image"].strip()
         ):
-            verified_parent_covers.setdefault(normalize_game_title(name), cached["image"])
+            verified_parent_covers.setdefault(normalized_name, cached["image"])
 
     inherited = 0
     for item in items:
+        item.pop("artwork_missing_reason", None)
+        if isinstance(item.get("image"), str) and item["image"].strip():
+            if item.get("artwork_inherited") is True:
+                continue
+            if item.get("item_type") != "dlc":
+                continue
+
         if item.get("item_type") != "dlc":
+            if not isinstance(item.get("image"), str) or not item["image"].strip():
+                item["artwork_missing_reason"] = "standalone_cover_unavailable"
             continue
+
         parent_game, link = item.get("parent_game"), item.get("link")
-        if not isinstance(parent_game, str) or not parent_game.strip() or not isinstance(link, str):
-            continue
-        child_cache = metadata_cache.get(link)
+        child_cache = metadata_cache.get(link) if isinstance(link, str) else None
         if (
             isinstance(child_cache, dict)
             and child_cache.get("artwork_verified") is True
@@ -126,21 +139,37 @@ def apply_parent_game_artwork(
             item["image"] = child_cache["image"]
             item.pop("artwork_inherited", None)
             continue
-        parent_cover = verified_parent_covers.get(normalize_game_title(parent_game))
-        if not parent_cover:
+
+        if not isinstance(parent_game, str) or not parent_game.strip():
+            item["artwork_missing_reason"] = "parent_relationship_missing"
             continue
-        item["image"] = parent_cover
-        item["artwork_inherited"] = True
-        inherited += 1
+
+        normalized_parent = normalize_game_title(parent_game)
+        parent_cover = verified_parent_covers.get(normalized_parent)
+        if parent_cover:
+            item["image"] = parent_cover
+            item["artwork_inherited"] = True
+            item.pop("artwork_missing_reason", None)
+            inherited += 1
+        elif normalized_parent not in collection_games:
+            item["artwork_missing_reason"] = "parent_not_in_collection"
+        else:
+            item["artwork_missing_reason"] = "parent_cover_not_verified"
     return inherited
 
 def summarize_artwork_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize cover availability without exposing an unbounded missing-title list."""
-    missing = [
-        str(item.get("name") or "Unknown title")
-        for item in items
+    missing_items = [
+        item for item in items
         if not isinstance(item.get("image"), str) or not item["image"].strip()
     ]
+    missing = [str(item.get("name") or "Unknown title") for item in missing_items]
+    by_reason: dict[str, list[str]] = {}
+    for item in missing_items:
+        reason = item.get("artwork_missing_reason", "not_classified")
+        if not isinstance(reason, str):
+            reason = "not_classified"
+        by_reason.setdefault(reason, []).append(str(item.get("name") or "Unknown title"))
     total = len(items)
     with_artwork = total - len(missing)
     return {
@@ -150,4 +179,10 @@ def summarize_artwork_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
         "coverage_percent": round(with_artwork * 100 / total) if total else 0,
         "missing_artwork_sample": missing[:25],
         "missing_artwork_sample_truncated": len(missing) > 25,
+        "artwork_missing_by_reason": {
+            reason: len(names) for reason, names in sorted(by_reason.items())
+        },
+        "artwork_missing_samples_by_reason": {
+            reason: names[:10] for reason, names in sorted(by_reason.items())
+        },
     }
