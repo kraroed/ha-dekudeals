@@ -2,9 +2,11 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.22**
+**Release: 0.4.23**
 
 Version 0.4.22 is the corrective release for the previously published 0.4.21 tag, which pointed to the pre-diagnostics source commit. This release includes the platform-aware DLC artwork inheritance and detailed TheGamesDB lookup diagnostics described below. Install 0.4.22 to ensure those changes are actually present.
+
+Version 0.4.23 improves TheGamesDB rate-limit handling. HTTP 429 responses now trigger a provider-wide cooldown, honoring the `Retry-After` header when supplied and otherwise applying exponential backoff. Artwork lookups are paused during the cooldown and report a distinct `provider_rate_limited` diagnostic status instead of treating throttling as a missing cover.
 
 Version 0.4.21 improves artwork coverage for DLC and makes TheGamesDB lookup outcomes diagnosable. DLC parent artwork inheritance now resolves missing or `Unknown` item platforms using the configured console, and only reuses a verified parent cover from the same platform. TheGamesDB lookups now expose explicit per-item statuses for missing API keys, platform mapping, provider/network failures, exact-title misses, and covers that fail verification. Transient failures remain eligible for retry, while definitive misses retain their retry interval. The Artwork URL Coverage sensor now includes bounded counts and samples grouped by lookup status.
 
