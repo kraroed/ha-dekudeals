@@ -2,12 +2,16 @@
 
 import asyncio
 
+import aiohttp
+
 from custom_components.dekudeals.thegamesdb import TheGamesDBArtworkProvider
 
 
 class FakeResponse:
-    def __init__(self, payload):
+    def __init__(self, payload, status=200, headers=None):
         self.payload = payload
+        self.status = status
+        self.headers = headers or {}
 
     async def __aenter__(self):
         return self
@@ -16,7 +20,14 @@ class FakeResponse:
         return False
 
     def raise_for_status(self):
-        return None
+        if self.status >= 400:
+            raise aiohttp.ClientResponseError(
+                request_info=None,
+                history=(),
+                status=self.status,
+                message="test HTTP error",
+                headers=self.headers,
+            )
 
     async def json(self, content_type=None):
         return self.payload
@@ -29,7 +40,10 @@ class FakeSession:
 
     def get(self, url, *, params, timeout):
         self.calls.append((url, params))
-        return FakeResponse(self.payloads.pop(0))
+        response = self.payloads.pop(0)
+        if isinstance(response, FakeResponse):
+            return response
+        return FakeResponse(response)
 
 
 def _platforms_payload():
@@ -160,7 +174,6 @@ def test_platform_catalog_failure_is_cached_briefly_then_retried(monkeypatch):
     asyncio.run(run())
 
 
-
 def test_provider_diagnostic_distinguishes_no_game_candidates():
     async def run():
         session = FakeSession([
@@ -215,5 +228,72 @@ def test_provider_diagnostic_marks_malformed_platform_catalog_retryable():
         assert await provider.async_get_front_cover(
             "Example Game", "Switch"
         ) == (None, False)
+
+    asyncio.run(run())
+
+
+def test_http_429_honors_retry_after_and_pauses_all_lookups(monkeypatch):
+    from types import SimpleNamespace
+
+    from custom_components.dekudeals import thegamesdb as module
+
+    async def run():
+        clock = [1000.0]
+        monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+        session = FakeSession([
+            FakeResponse({}, status=429, headers={"Retry-After": "120"}),
+            _platforms_payload(),
+            _games_payload(),
+        ])
+        provider = TheGamesDBArtworkProvider(session, "test-key")
+
+        assert await provider.async_get_front_cover_diagnostic(
+            "First Game", "Switch"
+        ) == (None, "provider_rate_limited")
+        assert len(session.calls) == 1
+
+        # The cooldown is provider-wide: another title does not trigger even
+        # a platform-catalog request while the Retry-After window is active.
+        assert await provider.async_get_front_cover_diagnostic(
+            "Second Game", "Switch"
+        ) == (None, "provider_rate_limited")
+        assert len(session.calls) == 1
+
+        clock[0] += 121
+        assert await provider.async_get_front_cover_diagnostic(
+            "Example Game", "Switch"
+        ) == (
+            "https://cdn.thegamesdb.net/images/original/boxart/front/42-1.jpg",
+            "verified_cover",
+        )
+        assert len(session.calls) == 3
+
+    asyncio.run(run())
+
+
+def test_http_429_uses_exponential_backoff_when_retry_after_missing(monkeypatch):
+    from types import SimpleNamespace
+
+    from custom_components.dekudeals import thegamesdb as module
+
+    async def run():
+        clock = [500.0]
+        monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+        session = FakeSession([
+            FakeResponse({}, status=429),
+            _platforms_payload(),
+            _games_payload(),
+        ])
+        provider = TheGamesDBArtworkProvider(session, "test-key")
+
+        assert await provider.async_get_front_cover_diagnostic(
+            "First Game", "Switch"
+        ) == (None, "provider_rate_limited")
+        assert provider._rate_limit_retry_after == 500 + 15 * 60
+        assert provider._rate_limit_backoff == 30 * 60
+        assert await provider.async_get_front_cover_diagnostic(
+            "Second Game", "Switch"
+        ) == (None, "provider_rate_limited")
+        assert len(session.calls) == 1
 
     asyncio.run(run())
