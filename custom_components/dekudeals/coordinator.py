@@ -299,6 +299,21 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 "DekuDeals metadata refresh for %s: no eligible missing metadata items",
                 self.platform,
             )
+            for item in enriched:
+                link = item.get("link")
+                cached = self._metadata_cache.get(link) if isinstance(link, str) else None
+                if (
+                    not isinstance(cached, dict)
+                    or not isinstance(cached.get("artwork_lookup_status"), str)
+                ) and item.get("item_type") == "dlc":
+                    parent = item.get("parent_game")
+                    platform = resolve_item_platform(item, self.platform)
+                    if isinstance(parent, str) and platform:
+                        cached = self._metadata_cache.get(
+                            parent_artwork_cache_key(parent, platform)
+                        )
+                if isinstance(cached, dict) and isinstance(cached.get("artwork_lookup_status"), str):
+                    item["artwork_lookup_status"] = cached["artwork_lookup_status"]
             try:
                 await self._metadata_store.async_save(
                     {"items": self._metadata_cache, "cursor": self._metadata_cursor}
@@ -453,6 +468,16 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         for item in enriched:
             link = item.get("link")
             cached = self._metadata_cache.get(link) if isinstance(link, str) else None
+            if (
+                not isinstance(cached, dict)
+                or not isinstance(cached.get("artwork_lookup_status"), str)
+            ) and item.get("item_type") == "dlc":
+                parent = item.get("parent_game")
+                platform = resolve_item_platform(item, self.platform)
+                if isinstance(parent, str) and platform:
+                    cached = self._metadata_cache.get(
+                        parent_artwork_cache_key(parent, platform)
+                    )
             if isinstance(cached, dict) and isinstance(cached.get("artwork_lookup_status"), str):
                 item["artwork_lookup_status"] = cached["artwork_lookup_status"]
         try:
