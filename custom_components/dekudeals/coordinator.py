@@ -272,7 +272,7 @@ class DekuDealsCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
         if not candidates:
             await self._async_lookup_external_parent_artwork(enriched)
-            inherited_count = apply_parent_game_artwork(enriched, self._metadata_cache)
+            inherited_count = apply_parent_game_artwork(enriched, self._metadata_cache, self.platform)
             if inherited_count:
                 _LOGGER.debug(
                     "DekuDeals metadata refresh for %s: reused verified parent-game artwork for %d DLC entries",
