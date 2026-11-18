@@ -34,8 +34,8 @@ The integration reads the public JSON export available by appending `.json` to a
 - Preserve duplicate collection rows and their original order.
 - Normalize missing platform values to `Unknown`.
 - Enrich collection rows with verified portrait artwork, the actual item-page Description text, and DLC classification from public DekuDeals item titles and descriptions.
-- Reuse a verified parent game's cover for DLC only when the item page explicitly identifies that parent and the DLC has no verified standalone cover; inherited artwork is marked with `artwork_inherited`.
-- Optional TheGamesDB artwork lookup: when an API key is configured, the integration requests the exact game title and console and accepts only images explicitly marked `boxart` / `front` with portrait dimensions. No approximate title or cross-console matches are accepted.
+- Reuse a verified parent game's cover for DLC only when the item page explicitly identifies that parent and the DLC has no verified standalone cover; inherited artwork is marked with `artwork_inherited`. If the parent is not in the collection, perform a separate exact-title, exact-platform TheGamesDB lookup and cache the verified parent cover for reuse across matching DLC.
+- Optional TheGamesDB artwork lookup: when an API key is configured, the integration requests the exact game title and console and accepts only images explicitly marked `boxart` / `front` with portrait dimensions. No approximate title or cross-console matches are accepted. External DLC-parent lookups are deduplicated by normalized parent title and platform, limited to 25 unique parents per refresh, cached for 30 days when verified and 7 days for definitive misses, and retried after transient failures.
 - Retry one provider lookup for previously cached missing covers after an API key is added; unsuccessful lookups retain the normal seven-day retry interval.
 - Cache game metadata locally using a fresh versioned cache key so upgrades do not require an unsupported Home Assistant storage migration; fetch at most 50 missing item pages per collection refresh with limited concurrency to avoid excessive requests.
 - Collection count sensors for full games, DLC items, Switch, Switch 2, physical games, and digital games. DLC does not inflate full-game counts.
@@ -107,7 +107,7 @@ Rows are not deduplicated. Each physical row represents a separate collection co
 
 - **Games** — imported full-game rows, excluding DLC.
 - **DLC Items** — imported DLC rows.
-- **Artwork URL Coverage** — percentage of collection rows with a non-empty artwork URL (not a live image-validity check); attributes include total, covered, missing counts, up to 25 missing titles, `artwork_missing_by_reason` counts, and up to 10 sample titles per reason. Missing-artwork reasons distinguish `standalone_cover_unavailable`, `parent_relationship_missing`, `parent_not_in_collection`, and `parent_cover_not_verified`.
+- **Artwork URL Coverage** — percentage of collection rows with a non-empty artwork URL (not a live image-validity check); attributes include total, covered, missing counts, up to 25 missing titles, `artwork_missing_by_reason` counts, and up to 10 sample titles per reason. Missing-artwork reasons distinguish `standalone_cover_unavailable`, `parent_relationship_missing`, `parent_not_in_collection`, `parent_cover_not_verified`, and `external_parent_cover_unavailable`.
 - **Switch Games** — rows whose platform is Switch.
 - **Switch 2 Games** — rows whose platform is Switch 2.
 - **Configured Platform Games** — full-game rows for the platform selected in this integration entry; use this sensor for PlayStation, Xbox, retro consoles, or `All Platforms`.
