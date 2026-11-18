@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import aiohttp
@@ -13,6 +15,13 @@ from .artwork import normalize_game_title, select_thegamesdb_front_cover
 
 _LOGGER = logging.getLogger(__name__)
 _API_BASE = "https://api.thegamesdb.net/v1"
+_RATE_LIMIT_BACKOFF_INITIAL = 15 * 60
+_RATE_LIMIT_BACKOFF_MAX = 6 * 60 * 60
+_RATE_LIMIT_HEADER_MAX = 24 * 60 * 60
+
+
+class TheGamesDBRateLimitedError(Exception):
+    """Raised when the provider has asked the client to slow down."""
 
 
 class TheGamesDBArtworkProvider:
@@ -25,27 +34,96 @@ class TheGamesDBArtworkProvider:
         self._platform_catalog_valid: bool | None = None
         self._platform_lock = asyncio.Lock()
         self._platform_retry_after = 0.0
+        self._rate_limit_retry_after = 0.0
+        self._rate_limit_backoff = _RATE_LIMIT_BACKOFF_INITIAL
+        self._rate_limit_lock = asyncio.Lock()
+
+    @staticmethod
+    def _retry_after_seconds(headers: Any) -> int | None:
+        """Parse Retry-After as delta seconds or an HTTP date."""
+        value = headers.get("Retry-After") if headers else None
+        if not isinstance(value, str) or not value.strip():
+            return None
+        value = value.strip()
+        try:
+            seconds = float(value)
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(value)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                seconds = (retry_at - datetime.now(timezone.utc)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                return None
+        if seconds <= 0:
+            return 1
+        return min(int(seconds + 0.999), _RATE_LIMIT_HEADER_MAX)
+
+    async def _async_record_rate_limit(self, headers: Any) -> None:
+        """Set one shared cooldown for every provider endpoint."""
+        async with self._rate_limit_lock:
+            # Concurrent requests can all receive 429. Count that as one
+            # provider event rather than repeatedly extending the cooldown.
+            if time.monotonic() < self._rate_limit_retry_after:
+                return
+            retry_after = self._retry_after_seconds(headers)
+            delay = retry_after or self._rate_limit_backoff
+            self._rate_limit_retry_after = time.monotonic() + delay
+            self._rate_limit_backoff = min(
+                self._rate_limit_backoff * 2, _RATE_LIMIT_BACKOFF_MAX
+            )
+            _LOGGER.warning(
+                "TheGamesDB rate limit reached (HTTP 429). Pausing all artwork "
+                "lookups for approximately %d seconds%s.",
+                delay,
+                " as requested by Retry-After" if retry_after else " using backoff",
+            )
+
+    async def _async_request_json(self, endpoint: str, params: dict[str, str]) -> Any:
+        """Perform a provider request and centrally enforce rate-limit handling."""
+        if time.monotonic() < self._rate_limit_retry_after:
+            raise TheGamesDBRateLimitedError
+        async with self._session.get(
+            f"{_API_BASE}/{endpoint}",
+            params=params,
+            timeout=aiohttp.ClientTimeout(total=20),
+        ) as response:
+            if response.status == 429:
+                await self._async_record_rate_limit(response.headers)
+                raise TheGamesDBRateLimitedError
+            response.raise_for_status()
+            payload = await response.json(content_type=None)
+        # A successful provider response indicates service recovery.
+        if self._rate_limit_retry_after:
+            self._rate_limit_retry_after = 0.0
+            self._rate_limit_backoff = _RATE_LIMIT_BACKOFF_INITIAL
+        return payload
 
     async def _async_get_platform_ids(self) -> dict[str, int]:
         """Load and normalize TheGamesDB platform names once per runtime."""
+        if time.monotonic() < self._rate_limit_retry_after:
+            raise TheGamesDBRateLimitedError
         if self._platform_ids is not None and time.monotonic() < self._platform_retry_after:
             return self._platform_ids
         if self._platform_ids is not None and self._platform_retry_after == 0:
             return self._platform_ids
 
         async with self._platform_lock:
+            if time.monotonic() < self._rate_limit_retry_after:
+                raise TheGamesDBRateLimitedError
             if self._platform_ids is not None and time.monotonic() < self._platform_retry_after:
                 return self._platform_ids
             if self._platform_ids is not None and self._platform_retry_after == 0:
                 return self._platform_ids
             try:
-                async with self._session.get(
-                    f"{_API_BASE}/Platforms",
-                    params={"apikey": self._api_key},
-                    timeout=aiohttp.ClientTimeout(total=20),
-                ) as response:
-                    response.raise_for_status()
-                    payload = await response.json(content_type=None)
+                payload = await self._async_request_json(
+                    "Platforms", {"apikey": self._api_key}
+                )
+            except TheGamesDBRateLimitedError:
+                self._platform_ids = {}
+                self._platform_catalog_valid = None
+                self._platform_retry_after = self._rate_limit_retry_after
+                raise
             except (aiohttp.ClientError, asyncio.TimeoutError):
                 self._platform_ids = {}
                 self._platform_catalog_valid = None
@@ -94,6 +172,8 @@ class TheGamesDBArtworkProvider:
             return None, "api_key_missing"
         if not title.strip() or not platform.strip():
             return None, "invalid_lookup_input"
+        if time.monotonic() < self._rate_limit_retry_after:
+            return None, "provider_rate_limited"
 
         try:
             platform_ids = await self._async_get_platform_ids()
@@ -125,18 +205,15 @@ class TheGamesDBArtworkProvider:
                 platform,
                 platform_id,
             )
-            async with self._session.get(
-                f"{_API_BASE}/Games/ByGameName",
-                params={
+            payload: Any = await self._async_request_json(
+                "Games/ByGameName",
+                {
                     "apikey": self._api_key,
                     "name": title,
                     "filter[platform]": str(platform_id),
                     "include": "boxart,platform",
                 },
-                timeout=aiohttp.ClientTimeout(total=20),
-            ) as response:
-                response.raise_for_status()
-                payload: Any = await response.json(content_type=None)
+            )
 
             data = payload.get("data") if isinstance(payload, dict) else None
             games = data.get("games") if isinstance(data, dict) else None
@@ -171,13 +248,17 @@ class TheGamesDBArtworkProvider:
                 platform,
             )
             return None, "no_verified_front_cover"
+        except TheGamesDBRateLimitedError:
+            return None, "provider_rate_limited"
         except aiohttp.ClientResponseError as err:
             _LOGGER.warning(
                 "TheGamesDB returned HTTP %s while looking up artwork for %r (%s). "
-                "Check the configured API key and TheGamesDB service access.",
+                "Check TheGamesDB service access and API allowance; HTTP %s does "
+                "not by itself establish that the API key is invalid.",
                 err.status,
                 title,
                 platform,
+                err.status,
             )
             return None, "provider_http_error"
         except (
