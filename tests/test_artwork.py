@@ -100,6 +100,10 @@ def test_artwork_coverage_reports_counts_and_missing_titles():
         "coverage_percent": 33,
         "missing_artwork_sample": ["Game Two", "Game Three"],
         "missing_artwork_sample_truncated": False,
+        "artwork_missing_by_reason": {"not_classified": 2},
+        "artwork_missing_samples_by_reason": {
+            "not_classified": ["Game Two", "Game Three"]
+        },
     }
 
 
@@ -185,3 +189,38 @@ def test_unverified_parent_artwork_is_never_inherited():
 
     assert apply_parent_game_artwork(items, cache) == 0
     assert "image" not in items[1]
+
+
+
+def test_missing_artwork_diagnostics_distinguish_dlc_relationship_gaps():
+    parent_url = "https://dekudeals.com/items/parent"
+    items = [
+        {"name": "Parent Game", "link": parent_url, "item_type": "game"},
+        {"name": "Expansion One", "item_type": "dlc"},
+        {
+            "name": "Expansion Two",
+            "item_type": "dlc",
+            "parent_game": "Game Not In Collection",
+        },
+        {
+            "name": "Expansion Three",
+            "item_type": "dlc",
+            "parent_game": "Parent Game",
+        },
+        {"name": "Standalone Game", "item_type": "game"},
+    ]
+    apply_parent_game_artwork(
+        items,
+        {parent_url: {"image": "https://cdn.example/unverified.jpg", "artwork_verified": False}},
+    )
+
+    result = summarize_artwork_coverage(items)
+    assert result["artwork_missing_by_reason"] == {
+        "parent_cover_not_verified": 1,
+        "parent_not_in_collection": 1,
+        "parent_relationship_missing": 1,
+        "standalone_cover_unavailable": 2,
+    }
+    assert result["artwork_missing_samples_by_reason"]["parent_relationship_missing"] == [
+        "Expansion One"
+    ]
