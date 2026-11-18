@@ -21,7 +21,7 @@ COLLECTION_DESCRIPTIONS = (
     SensorEntityDescription(key="physical_games", name="Physical Games", icon="mdi:gamepad"),
     SensorEntityDescription(key="digital_games", name="Digital Games", icon="mdi:download"),
     SensorEntityDescription(key="dlc_items", name="DLC Items", icon="mdi:download-box"),
-    SensorEntityDescription(key="artwork_coverage", name="Artwork Coverage", icon="mdi:image-check"),
+    SensorEntityDescription(\n        key="artwork_coverage",\n        name="Artwork URL Coverage",\n        icon="mdi:image-check",\n        native_unit_of_measurement="%",\n        state_class="measurement",\n    ),
 )
 
 INVENTORY_DESCRIPTIONS = (
