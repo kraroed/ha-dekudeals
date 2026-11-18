@@ -2,9 +2,9 @@
 
 A Home Assistant custom integration for synchronizing a public DekuDeals collection and tracking physical game copies and loans.
 
-**Release: 0.4.13**
+**Release: 0.4.14**
 
-Version 0.4.13 fixes incomplete artwork downloads by reading the complete upstream image stream in bounded chunks, enforcing the 8 MiB limit during streaming, and asking upstream servers and caches not to transform the original image bytes. This preserves sharp, fully loaded cover art in Lovelace.
+Version 0.4.14 adds the Artwork URL Coverage diagnostic sensor, reports its value as a Home Assistant percentage measurement, and retries transient TheGamesDB lookup failures on the next collection refresh instead of suppressing them for seven days. Definitive no-match lookups retain the normal seven-day retry interval.\n\nVersion 0.4.13 fixes incomplete artwork downloads by reading the complete upstream image stream in bounded chunks, enforcing the 8 MiB limit during streaming, and asking upstream servers and caches not to transform the original image bytes. This preserves sharp, fully loaded cover art in Lovelace.
 
 Version 0.4.12 fixes the artwork proxy's Home Assistant request context so signed artwork URLs are served correctly.
 
