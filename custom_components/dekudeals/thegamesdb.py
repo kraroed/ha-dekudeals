@@ -92,6 +92,10 @@ class TheGamesDBArtworkProvider:
             return None, False
         try:
             platform_ids = await self._async_get_platform_ids()
+            if not platform_ids and time.monotonic() < self._platform_retry_after:
+                # The platform catalog request failed recently. Its short-lived
+                # empty cache is not a definitive unknown-platform result.
+                return None, False
             requested_platform = normalize_game_title(platform)
             platform_id = platform_ids.get(requested_platform)
             if platform_id is None:
