@@ -107,7 +107,7 @@ Rows are not deduplicated. Each physical row represents a separate collection co
 
 - **Games** — imported full-game rows, excluding DLC.
 - **DLC Items** — imported DLC rows.
-- **Artwork URL Coverage** — percentage of collection rows with a non-empty artwork URL (not a live image-validity check); attributes include total, covered, missing counts, and up to 25 missing game titles to help identify artwork lookup gaps.
+- **Artwork URL Coverage** — percentage of collection rows with a non-empty artwork URL (not a live image-validity check); attributes include total, covered, missing counts, up to 25 missing titles, `artwork_missing_by_reason` counts, and up to 10 sample titles per reason. Missing-artwork reasons distinguish `standalone_cover_unavailable`, `parent_relationship_missing`, `parent_not_in_collection`, and `parent_cover_not_verified`.
 - **Switch Games** — rows whose platform is Switch.
 - **Switch 2 Games** — rows whose platform is Switch 2.
 - **Configured Platform Games** — full-game rows for the platform selected in this integration entry; use this sensor for PlayStation, Xbox, retro consoles, or `All Platforms`.
