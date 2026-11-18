@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import aiohttp
+import logging
 import voluptuous as vol
 from urllib.parse import urlparse
 
@@ -26,6 +27,8 @@ ATTR_DUE_DATE = "due_date"
 ATTR_NOTES = "notes"
 ATTR_RESOLUTION = "resolution"
 ATTR_GAME_NAME = "game_name"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _get_inventory(hass: HomeAssistant, call: ServiceCall) -> tuple[str, GameInventory]:
@@ -113,10 +116,26 @@ def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def refresh_artwork(call: ServiceCall) -> None:
-        entry_id, _inventory = _get_inventory(hass, call)
-        entry_data = hass.data[DOMAIN]["entries"][entry_id]
-        await _refresh_and_reconcile(
-            entry_data, entry_data["coordinator"].async_refresh_artwork
+        """Force artwork lookups and log each service boundary."""
+        _LOGGER.info(
+            "Artwork refresh service received (config_entry_id=%s)",
+            call.data.get(ATTR_CONFIG_ENTRY_ID, "auto"),
+        )
+        try:
+            entry_id, _inventory = _get_inventory(hass, call)
+            entry_data = hass.data[DOMAIN]["entries"][entry_id]
+            _LOGGER.info(
+                "Artwork refresh service selected config entry %s; invoking coordinator",
+                entry_id,
+            )
+            await _refresh_and_reconcile(
+                entry_data, entry_data["coordinator"].async_refresh_artwork
+            )
+        except Exception:
+            _LOGGER.exception("Artwork refresh service failed")
+            raise
+        _LOGGER.info(
+            "Artwork refresh service completed for config entry %s", entry_id
         )
 
     async def diagnose_artwork(call: ServiceCall) -> None:
