@@ -97,10 +97,10 @@ class TheGamesDBArtworkProvider:
 
         try:
             platform_ids = await self._async_get_platform_ids()
-            if not platform_ids and time.monotonic() < self._platform_retry_after:
-                return None, "platform_catalog_unavailable"
             if self._platform_catalog_valid is False:
                 return None, "invalid_platform_catalog"
+            if not platform_ids and time.monotonic() < self._platform_retry_after:
+                return None, "platform_catalog_unavailable"
 
             requested_platform = normalize_game_title(platform)
             platform_id = platform_ids.get(requested_platform)
