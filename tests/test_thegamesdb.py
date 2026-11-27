@@ -3,6 +3,7 @@
 import asyncio
 
 import aiohttp
+import pytest
 
 from custom_components.dekudeals.thegamesdb import TheGamesDBArtworkProvider
 
@@ -295,5 +296,50 @@ def test_http_429_uses_exponential_backoff_when_retry_after_missing(monkeypatch)
             "Second Game", "Switch"
         ) == (None, "provider_rate_limited")
         assert len(session.calls) == 1
+
+    asyncio.run(run())
+
+
+
+def test_stale_success_does_not_clear_newer_rate_limit(monkeypatch):
+    from types import SimpleNamespace
+    from custom_components.dekudeals import thegamesdb as module
+
+    class BlockingResponse(FakeResponse):
+        def __init__(self, started, release):
+            super().__init__({"data": {"ok": True}})
+            self.started = started
+            self.release = release
+
+        async def __aenter__(self):
+            self.started.set()
+            await self.release.wait()
+            return self
+
+    class BlockingSession:
+        def __init__(self, response):
+            self.response = response
+
+        def get(self, url, *, params, timeout):
+            return self.response
+
+    async def run():
+        clock = [1000.0]
+        monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+        started = asyncio.Event()
+        release = asyncio.Event()
+        provider = TheGamesDBArtworkProvider(
+            BlockingSession(BlockingResponse(started, release)), "test-key"
+        )
+        request = asyncio.create_task(provider._async_request_json("Games", {}))
+        await started.wait()
+        await provider._async_record_rate_limit({"Retry-After": "120"})
+        release.set()
+
+        assert await request == {"data": {"ok": True}}
+        assert provider._rate_limit_retry_after == 1120.0
+        assert provider._rate_limit_backoff == 30 * 60
+        with pytest.raises(module.TheGamesDBRateLimitedError):
+            await provider._async_request_json("Games", {})
 
     asyncio.run(run())

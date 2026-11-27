@@ -10,6 +10,7 @@ from custom_components.dekudeals.inventory import GameInventory, InventoryError
 
 STORE_DATA = {}
 FAIL_SAVE = set()
+SILENT_FAIL_SAVE = set()
 
 
 class FakeStore:
@@ -24,6 +25,9 @@ class FakeStore:
     async def async_save(self, data):
         if self.key in FAIL_SAVE:
             raise OSError("simulated storage failure")
+        if self.key in SILENT_FAIL_SAVE:
+            # Home Assistant Store logs write errors and returns normally.
+            return
         STORE_DATA[self.key] = deepcopy(data)
 
 
@@ -31,6 +35,7 @@ class FakeStore:
 def reset_store(monkeypatch):
     STORE_DATA.clear()
     FAIL_SAVE.clear()
+    SILENT_FAIL_SAVE.clear()
     monkeypatch.setattr(inventory_module, "Store", FakeStore)
 
 
@@ -105,6 +110,18 @@ def test_failed_storage_save_rolls_back_memory():
     assert "dekudeals_test_inventory" not in STORE_DATA
 
 
+def test_silently_failed_store_write_rolls_back_memory():
+    inventory = _new_inventory()
+    before = inventory.snapshot()
+    SILENT_FAIL_SAVE.add("dekudeals_test_inventory")
+
+    with pytest.raises(InventoryError, match="did not retain"):
+        asyncio.run(inventory.async_register_copy("Example"))
+
+    assert inventory.snapshot() == before
+    assert "dekudeals_test_inventory" not in STORE_DATA
+
+
 def test_inventory_survives_reload():
     first = _new_inventory()
     copy_id = asyncio.run(first.async_register_copy("Example", "Switch 2"))
@@ -152,6 +169,39 @@ def test_rejects_malformed_persisted_inventory():
 
     with pytest.raises(InventoryError):
         _new_inventory("broken")
+
+
+def test_rejects_copy_record_missing_active_loan_field():
+    STORE_DATA["dekudeals_missing_loan_inventory"] = {
+        "schema_version": 1,
+        "copies": {"copy-1": {
+            "copy_id": "copy-1", "game": "Example", "platform": "Switch",
+            "format": "physical", "source": "manual",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }},
+        "history": [],
+    }
+    with pytest.raises(InventoryError, match="active loan state"):
+        _new_inventory("missing_loan")
+
+
+def test_returned_history_requires_original_lent_timestamp():
+    malformed = {
+        "schema_version": 1,
+        "copies": {"copy-1": {
+            "copy_id": "copy-1", "game": "Example", "platform": "Switch",
+            "format": "physical", "source": "manual",
+            "created_at": "2026-01-01T00:00:00+00:00", "active_loan": None,
+        }},
+        "history": [{
+            "event_id": "event-1", "copy_id": "copy-1", "game": "Example",
+            "event": "returned", "borrower": "Alex",
+            "returned_at": "2026-01-02T00:00:00+00:00",
+        }],
+    }
+    STORE_DATA["dekudeals_missing_lent_timestamp_inventory"] = malformed
+    with pytest.raises(InventoryError, match="original lent timestamp"):
+        _new_inventory("missing_lent_timestamp")
 
 
 def test_malformed_storage_is_not_overwritten_during_load():

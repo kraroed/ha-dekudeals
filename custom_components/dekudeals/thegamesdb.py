@@ -36,6 +36,7 @@ class TheGamesDBArtworkProvider:
         self._platform_retry_after = 0.0
         self._rate_limit_retry_after = 0.0
         self._rate_limit_backoff = _RATE_LIMIT_BACKOFF_INITIAL
+        self._rate_limit_generation = 0
         self._rate_limit_lock = asyncio.Lock()
 
     @staticmethod
@@ -68,6 +69,7 @@ class TheGamesDBArtworkProvider:
                 return
             retry_after = self._retry_after_seconds(headers)
             delay = retry_after or self._rate_limit_backoff
+            self._rate_limit_generation += 1
             self._rate_limit_retry_after = time.monotonic() + delay
             self._rate_limit_backoff = min(
                 self._rate_limit_backoff * 2, _RATE_LIMIT_BACKOFF_MAX
@@ -81,8 +83,11 @@ class TheGamesDBArtworkProvider:
 
     async def _async_request_json(self, endpoint: str, params: dict[str, str]) -> Any:
         """Perform a provider request and centrally enforce rate-limit handling."""
-        if time.monotonic() < self._rate_limit_retry_after:
-            raise TheGamesDBRateLimitedError
+        async with self._rate_limit_lock:
+            if time.monotonic() < self._rate_limit_retry_after:
+                raise TheGamesDBRateLimitedError
+            request_generation = self._rate_limit_generation
+
         async with self._session.get(
             f"{_API_BASE}/{endpoint}",
             params=params,
@@ -93,10 +98,12 @@ class TheGamesDBArtworkProvider:
                 raise TheGamesDBRateLimitedError
             response.raise_for_status()
             payload = await response.json(content_type=None)
-        # A successful provider response indicates service recovery.
-        if self._rate_limit_retry_after:
-            self._rate_limit_retry_after = 0.0
-            self._rate_limit_backoff = _RATE_LIMIT_BACKOFF_INITIAL
+        # A successful response only proves recovery if no newer request has
+        # reported a 429 since this request began.
+        async with self._rate_limit_lock:
+            if request_generation == self._rate_limit_generation:
+                self._rate_limit_retry_after = 0.0
+                self._rate_limit_backoff = _RATE_LIMIT_BACKOFF_INITIAL
         return payload
 
     async def _async_get_platform_ids(self) -> dict[str, int]:

@@ -75,6 +75,22 @@ def test_duplicate_count_change_is_flagged_without_guessing():
     assert plan["updates"]["copy-a"]["review_reason"] == "duplicate_count_changed"
 
 
+def test_shrinking_identical_duplicate_fingerprint_flags_the_whole_group():
+    incoming = [_item(), _item()]
+    identity = build_reconciliation_plan(incoming, {})["creates"][0]["identity"]
+    copies = {
+        "copy-a": _copy("copy-a", identity, {"borrower": "Alex"}),
+        "copy-b": _copy("copy-b", identity, {"borrower": "Jordan"}),
+    }
+    plan = build_reconciliation_plan([_item()], copies)
+    assert plan["creates"] == []
+    assert plan["ambiguous"] == {"copy-a", "copy-b"}
+    assert set(plan["updates"]) == {"copy-a", "copy-b"}
+    assert all(plan["updates"][cid]["needs_review"] for cid in copies)
+    assert copies["copy-a"]["active_loan"]["borrower"] == "Alex"
+    assert copies["copy-b"]["active_loan"]["borrower"] == "Jordan"
+
+
 def test_missing_collection_item_is_retained_for_review():
     identity = build_reconciliation_plan([_item()], {})["creates"][0]["identity"]
     copies = {"copy-a": _copy("copy-a", identity)}

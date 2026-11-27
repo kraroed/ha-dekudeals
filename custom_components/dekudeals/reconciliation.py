@@ -115,6 +115,23 @@ def build_reconciliation_plan(
         for new in incoming:
             new_by_fingerprint[new["fingerprint"]].append(new)
 
+        # A changed count for an identical source-row fingerprint is ambiguous:
+        # never select an arbitrary copy by its sorted ID.
+        changed_duplicate_bucket = any(
+            old_by_fingerprint.get(fingerprint)
+            and new_by_fingerprint.get(fingerprint)
+            and len(old_by_fingerprint[fingerprint]) != len(new_by_fingerprint[fingerprint])
+            for fingerprint in set(old_by_fingerprint) | set(new_by_fingerprint)
+        )
+        if changed_duplicate_bucket:
+            ambiguous.update(old["copy_id"] for old in existing)
+            for old in existing:
+                updates[old["copy_id"]] = {
+                    "needs_review": True,
+                    "review_reason": "duplicate_count_changed",
+                }
+            continue
+
         remaining_old: list[dict[str, Any]] = []
         remaining_new: list[dict[str, Any]] = []
         for fingerprint in set(old_by_fingerprint) | set(new_by_fingerprint):
