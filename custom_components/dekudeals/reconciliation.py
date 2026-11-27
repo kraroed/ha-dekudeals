@@ -115,12 +115,13 @@ def build_reconciliation_plan(
         for new in incoming:
             new_by_fingerprint[new["fingerprint"]].append(new)
 
-        # A changed count for an identical source-row fingerprint is ambiguous:
-        # never select an arbitrary copy by its sorted ID.
+        # When an identical source-row fingerprint shrinks, there is no safe
+        # way to know which physical copy remains. Growth is handled below:
+        # creating an extra copy is allowed only after explicit confirmation.
         changed_duplicate_bucket = any(
             old_by_fingerprint.get(fingerprint)
             and new_by_fingerprint.get(fingerprint)
-            and len(old_by_fingerprint[fingerprint]) != len(new_by_fingerprint[fingerprint])
+            and len(old_by_fingerprint[fingerprint]) > len(new_by_fingerprint[fingerprint])
             for fingerprint in set(old_by_fingerprint) | set(new_by_fingerprint)
         )
         if changed_duplicate_bucket:

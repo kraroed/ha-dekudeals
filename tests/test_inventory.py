@@ -177,6 +177,7 @@ def test_rejects_copy_record_missing_active_loan_field():
         "copies": {"copy-1": {
             "copy_id": "copy-1", "game": "Example", "platform": "Switch",
             "format": "physical", "source": "manual",
+            "needs_review": False,
             "created_at": "2026-01-01T00:00:00+00:00",
         }},
         "history": [],
@@ -190,7 +191,7 @@ def test_returned_history_requires_original_lent_timestamp():
         "schema_version": 1,
         "copies": {"copy-1": {
             "copy_id": "copy-1", "game": "Example", "platform": "Switch",
-            "format": "physical", "source": "manual",
+            "format": "physical", "source": "manual", "needs_review": False,
             "created_at": "2026-01-01T00:00:00+00:00", "active_loan": None,
         }},
         "history": [{
