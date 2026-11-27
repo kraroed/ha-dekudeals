@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -37,11 +37,24 @@ def _valid_date(value: str | None) -> bool:
         return False
 
 
+def _valid_timestamp(value: Any) -> bool:
+    """Accept only parseable ISO timestamps for permanent loan records."""
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
 class GameInventory:
     """Manage locally stored physical copies without coupling them to imports."""
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
-        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry_id}_inventory")
+        self._hass = hass
+        self._store_key = f"{DOMAIN}_{entry_id}_inventory"
+        self._store = Store(hass, STORAGE_VERSION, self._store_key)
         self._data = deepcopy(EMPTY_DATA)
         self._lock = asyncio.Lock()
         self._loaded = False
@@ -98,8 +111,10 @@ class GameInventory:
                 or not item["image"].startswith("https://")
             ):
                 raise InventoryError("Inventory cover image must use HTTPS.")
-            if not isinstance(item.get("created_at"), str):
-                raise InventoryError("Inventory creation timestamp is missing.")
+            if not _valid_timestamp(item.get("created_at")):
+                raise InventoryError("Inventory creation timestamp is missing or invalid.")
+            if "active_loan" not in item:
+                raise InventoryError("Inventory copy is missing its active loan state.")
 
             loan = item.get("active_loan")
             if loan is not None:
@@ -107,7 +122,7 @@ class GameInventory:
                     loan.get("borrower"), str
                 ) or not loan["borrower"].strip():
                     raise InventoryError("Inventory loan record is malformed.")
-                if not isinstance(loan.get("lent_at"), str) or not _valid_date(
+                if not _valid_timestamp(loan.get("lent_at")) or not _valid_date(
                     loan.get("due_date")
                 ):
                     raise InventoryError("Inventory loan dates are malformed.")
@@ -127,10 +142,13 @@ class GameInventory:
                 or not event.get("borrower").strip()
             ):
                 raise InventoryError("Lending history event is malformed.")
-            timestamp_key = "returned_at" if event["event"] == "returned" else "lent_at"
-            if not isinstance(event.get(timestamp_key), str) or not _valid_date(
-                event.get("due_date")
+            if not _valid_timestamp(event.get("lent_at")):
+                raise InventoryError("Lending history is missing its original lent timestamp.")
+            if event["event"] == "returned" and not _valid_timestamp(
+                event.get("returned_at")
             ):
+                raise InventoryError("Lending history is missing its return timestamp.")
+            if not _valid_date(event.get("due_date")):
                 raise InventoryError("Lending history dates are malformed.")
 
     def snapshot(self) -> dict[str, Any]:
@@ -138,9 +156,27 @@ class GameInventory:
         return deepcopy(self._data)
 
     async def _async_commit(self, candidate: dict[str, Any]) -> None:
-        """Persist candidate data before publishing it in memory."""
+        """Verify durable storage before publishing candidate data in memory."""
         self._validate_data(candidate)
         await self._store.async_save(candidate)
+
+        # Home Assistant Store.async_save() catches WriteError and serialization
+        # failures internally. A successful await therefore does not prove that
+        # the file was written. A fresh Store bypasses this instance's pending
+        # in-memory cache and verifies the value actually readable from disk.
+        try:
+            persisted = await Store(
+                self._hass, STORAGE_VERSION, self._store_key
+            ).async_load()
+        except Exception as err:
+            raise InventoryError(
+                "Inventory storage could not be verified; the change was not committed."
+            ) from err
+        if persisted != candidate:
+            raise InventoryError(
+                "Inventory storage did not retain the requested change; "
+                "the change was not committed."
+            )
         self._data = candidate
 
     def _require_loaded(self) -> None:
